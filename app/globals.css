@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, rgba(0, 194, 203, 0.08), transparent 28%),
+    radial-gradient(circle at left top, rgba(251, 150, 81, 0.08), transparent 24%),
+    #f8f9fa;
+  color: #191c1d;
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.safe-bottom {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
+.glass {
+  backdrop-filter: blur(18px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-up {
+    animation: fade-up 0.35s ease-out both;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

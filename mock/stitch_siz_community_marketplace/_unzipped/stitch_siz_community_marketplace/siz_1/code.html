@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta_Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed": "#311300",
+                      "surface-container-low": "#f3f4f5",
+                      "on-primary-fixed": "#002022",
+                      "error": "#ba1a1a",
+                      "on-surface": "#191c1d",
+                      "tertiary-fixed": "#ffdbc8",
+                      "primary-fixed-dim": "#3edae3",
+                      "surface-container-high": "#e7e8e9",
+                      "error-container": "#ffdad6",
+                      "on-tertiary-container": "#6d3200",
+                      "on-secondary-fixed-variant": "#41484a",
+                      "surface-variant": "#e1e3e4",
+                      "primary-fixed": "#6bf6ff",
+                      "inverse-on-surface": "#f0f1f2",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary-fixed-variant": "#743500",
+                      "surface-tint": "#00696e",
+                      "tertiary-fixed-dim": "#ffb689",
+                      "on-primary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-container": "#5d6466",
+                      "tertiary": "#974803",
+                      "surface-bright": "#f8f9fa",
+                      "on-background": "#191c1d",
+                      "surface": "#f8f9fa",
+                      "on-secondary-fixed": "#161d1f",
+                      "secondary-fixed": "#dde4e6",
+                      "on-secondary": "#ffffff",
+                      "surface-container": "#edeeef",
+                      "secondary": "#586062",
+                      "surface-dim": "#d9dadb",
+                      "on-tertiary": "#ffffff",
+                      "background": "#f8f9fa",
+                      "surface-container-highest": "#e1e3e4",
+                      "secondary-container": "#dae1e3",
+                      "on-primary-container": "#004a4e",
+                      "primary": "#00696e",
+                      "outline-variant": "#bbc9ca",
+                      "on-surface-variant": "#3c494a",
+                      "inverse-surface": "#2e3132",
+                      "on-primary-fixed-variant": "#004f53",
+                      "secondary-fixed-dim": "#c1c8ca",
+                      "tertiary-container": "#fb9651",
+                      "inverse-primary": "#3edae3",
+                      "on-error": "#ffffff",
+                      "outline": "#6c7a7a",
+                      "primary-container": "#00c2cb"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "sm": "8px",
+                      "gutter": "12px",
+                      "xs": "4px",
+                      "lg": "24px",
+                      "xl": "32px",
+                      "unit": "4px",
+                      "container-padding": "20px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Plus Jakarta Sans"],
+                      "body-md": ["Plus Jakarta Sans"],
+                      "display-md": ["Plus Jakarta Sans"],
+                      "label-lg": ["Plus Jakarta Sans"],
+                      "title-md": ["Plus Jakarta Sans"],
+                      "display-lg": ["Plus Jakarta Sans"],
+                      "body-lg": ["Plus Jakarta Sans"],
+                      "label-sm": ["Plus Jakarta Sans"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "display-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "label-lg": ["13px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                      "title-md": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                      "display-lg": ["30px", {"lineHeight": "38px", "fontWeight": "700"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-24">
+<!-- Top App Bar -->
+<header class="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between px-5 h-16 w-full sticky top-0 z-50 flex-row-reverse">
+<div class="flex items-center gap-4">
+<button class="transition-all duration-200 active:scale-95 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</div>
+<h1 class="text-2xl font-black text-[#00C2CB] tracking-tight font-['Plus_Jakarta_Sans']">SIZ</h1>
+<div class="flex items-center">
+<button class="transition-all duration-200 active:scale-95 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+</header>
+<main class="max-w-2xl mx-auto">
+<!-- Messages Headline & Search -->
+<div class="px-container-padding pt-lg pb-md">
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-display-md text-display-md text-on-surface">הודעות</h2>
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-low text-primary transition-all active:scale-90">
+<span class="material-symbols-outlined" data-icon="edit_square">edit_square</span>
+</button>
+</div>
+<div class="relative group">
+<div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</div>
+<input class="w-full h-12 pr-12 pl-4 bg-white border border-outline-variant rounded-full font-body-md focus:ring-2 focus:ring-primary-container focus:border-primary transition-all outline-none" placeholder="חיפוש שיחות..." type="text"/>
+</div>
+</div>
+<!-- Active Status Carousel -->
+<div class="overflow-x-auto no-scrollbar flex flex-row-reverse gap-4 px-container-padding py-md">
+<div class="flex flex-col items-center gap-1 shrink-0">
+<div class="relative">
+<img alt="" class="w-14 h-14 rounded-full object-cover border-2 border-primary p-0.5" data-alt="close-up portrait of a young woman with a friendly smile, natural lighting, soft background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlJL5Pa4ViYeMV2Pf6JbErEhaE9y0VcTMz6Z4BrE0pnYHyz1jS54PMqjDxy2fZaLf4zbT9oxJvdOYVA1mgWh__csfSERMRe05yjrPObEIYGIENy0fHKSj0ZZ1Sfwyzb3aqRPKqoUoxe6hzw_VGS41OV_VcVuHAM027FVdHbnJz_pf9YYeaRggqQWoyqdeR1WGE7mOqKA65JQhaTdbSOlN6xRKO2KbUkh1bAuR9kV9hNQ2r9mhpcKgQsS-iC4OAX2owRDhmYifoEZI"/>
+<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">הסיפור שלך</span>
+</div>
+<!-- Dynamic Statuses -->
+<div class="flex flex-col items-center gap-1 shrink-0">
+<div class="relative">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="portrait of a young man with a beard and glasses in casual attire, outdoor urban setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJpwxI_n4aN2o4ICkcz33v9HVWV7B3N7l5MlSM_j-uuuhy3fDchYJH8FSoq8GlLpYz6_VMaDhqAfdjyP6brISLIgmEQKRwqSu0c9bK5xE5A40v1Hx5uH8x1_jO2f7q3m0a1fbP1R_iXcTvrnEK74zlfvm69FKg8xp7p2qEj0TXRNUXkB3xjjiMJAyhzNCImiXb0UwEURffYHKxElKJOr7FQ8dxuDTmz4j8FVb_soTv4_Za51LAZ_LIH71tvrAN7OczlaR_26Eky8Q"/>
+<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">דניאל</span>
+</div>
+<div class="flex flex-col items-center gap-1 shrink-0">
+<div class="relative">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="smiling young woman with braided hair, colorful studio lighting background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNy0nV7fLRKTRQPS6AT8ZL2WBP_KDrErANtNK-oMvquLP3MwWyC5eT-7gC8hK7GuJiPbUgmcxP4AUPOnD8eVsR66vE7ROclshAz7NhMyahZ6aP-nccb0PvFcvO6_v4G4DhMd-L3BKzDWz3AEnqo_3jREut8JlFsn4caagbRBKEN-mHzHKmuaKLt0zE-klwkBCsqr4FmleK0OrIiHVm3j6mroo4amPOK9lebYKe0sglTACehsuFOKs3Ac7q1UC5J1npofF-J71XXX8"/>
+<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">נועה</span>
+</div>
+<div class="flex flex-col items-center gap-1 shrink-0">
+<div class="relative">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="middle-aged man with kind eyes, professional headshot style, neutral gray background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoQrJEcfgKFeNbyedbnEZkoMH8Vpt3hveod9yzaiiCAk1gezDs6ZVx03e5r25ePvXdn5spCVLcVtm-qe5lZ4NsZc9ayHo8KDvT0zP2uV8aZYLBXnZ2nmqO4rALwxTquYAhAsRiby8WlqV0BLPAQQ85EwMUOL2MqBREDjS2N5jBI1stzggBY3x-WPCmW8dgYvr7gaBGy77_0hvHkxTTyssLZSu-AQnalkwjammfdmrd2-TmGs2AaPByIoKkE0o6i2tSAgmVxm19ffk"/>
+<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">יוסי</span>
+</div>
+<div class="flex flex-col items-center gap-1 shrink-0 opacity-60">
+<div class="relative">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="businesswoman in professional office setting, soft window lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9zQLfGM3-KQ_OwbuwJdg4JuTEGiLLAxJHzXDJHLXFRMJlwII0xo3bXOAnpcIzgEAsBHj7J-cupp7Hp9bdRxYI5NkuoukMKvrlAw8eHF_CnEwPTZlI8jM2M_XrmpBb2zJ6sw1NS5p_D8ZyoU5STlcwn_0Kam4VdsyUXGhV0grQs0b82lPKVatKOkJMgkwIWqmmFPyWh3EglckhFd47IUbpVuP6CoCMcr9CLpYQftKLOzxfAvuSTAU7UpxeArbdISEG1SgXEqq6PUA"/>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">עדי</span>
+</div>
+</div>
+<!-- Conversation List -->
+<div class="mt-md space-y-0.5">
+<!-- Unread Chat -->
+<div class="flex items-center gap-4 px-container-padding py-md bg-primary-container/5 hover:bg-surface-container transition-colors cursor-pointer">
+<div class="relative shrink-0">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="stylish man with accessories, leaning against a textured wall, cinematic lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuANvhufR9GfPsy6cVA46M4B2upv3PusuFwpambUqTeMbqa-77H8yv1dw_8CrEQcuvtnqFTqAJ-lC7hFFjIYgthVJMRtUiJIhfuFcJG-BZbbMw3zuHSA5QCS-aCnYFdRU3EwNKjhzlByWTaaImcvpJcjPw7nXh9MrMntjm4Xtx1BZ4z5Qn2KDMqe-gFBgGNK5w4RgFh4J3iu03KX648MqsBPge0BGGCO-WLFNZGjmkto5H0VjJLq7oeDwKpG8ONeHHpq6eD244U-Smc"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-0.5">
+<h3 class="font-title-md text-title-md text-on-surface truncate">דניאל אביב</h3>
+<span class="font-label-sm text-primary font-bold">12:45</span>
+</div>
+<div class="flex justify-between items-center">
+<p class="font-body-md text-on-surface font-semibold truncate ml-2">היי, ראיתי את הנעליים שפרסמת. זה עדיין רלוונטי?</p>
+<div class="w-5 h-5 bg-primary text-white text-[10px] flex items-center justify-center rounded-full shrink-0 font-bold">2</div>
+</div>
+</div>
+</div>
+<!-- Read Chat -->
+<div class="flex items-center gap-4 px-container-padding py-md hover:bg-surface-container transition-colors cursor-pointer border-b border-surface-container-low">
+<div class="shrink-0">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="natural portrait of a woman looking thoughtfully at the camera, soft daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvFpbDOta6nZIsMBcbucGO57Itmo4N50YjN1DydMxnGG_SzmFFxXGd7QjA4W2R1vryA08NCka3ywhI01VzrZuy78UgkmfJBfsjLQo3tm3CRisTHvKAzuxmsVx7pd0XD7ZgEI7R4aBJjJV92Hhof652PLOYtELPtNqMZvvCcIN9KuSOtQt_XM_bnywmhadwrgXgtzyre_F6y35LCQAtOBp0BeALaicpRohOWddo0VTJ5EvdIGiZpAHuJyceTqVk9HtlMmp8E1-Kcag"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-0.5">
+<h3 class="font-title-md text-title-md text-on-surface truncate">מיכל כהן</h3>
+<span class="font-label-sm text-outline">אתמול</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="done_all" style="font-variation-settings: 'FILL' 0;">done_all</span>
+<p class="font-body-md text-on-surface-variant truncate">תודה רבה! המעיל פשוט מושלם.</p>
+</div>
+</div>
+</div>
+<!-- Read Chat -->
+<div class="flex items-center gap-4 px-container-padding py-md hover:bg-surface-container transition-colors cursor-pointer border-b border-surface-container-low">
+<div class="shrink-0">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="man in denim shirt, studio portrait with warm lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpB5Ew_d-QfMh88BrAjiEfUoJXcoTWINgUWRaOay-TjrhsmM2ThDL2XD-bWSUrWccUzpqUCMuoMLhW4g_nfSVqA-DsTWL_E3GrFUMQ5xqWrLBGBjrVKjzI5t4IOqeWvr0xVVShrBqVOOFuZ8oZVI8226NcdjWmGuZCjZqD3FIosvw7BPqrlvlV3-rBSg0SDVxRusSHD1KoH0_UV5ECglthA9L5wwdqqkE-GM-iQPQxhOyb8CQ6SINmbd2yh91WeYp3ev9zDk_O3Xg"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-0.5">
+<h3 class="font-title-md text-title-md text-on-surface truncate">רועי לוי</h3>
+<span class="font-label-sm text-outline">אתמול</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-outline" data-icon="done" style="font-variation-settings: 'FILL' 0;">done</span>
+<p class="font-body-md text-on-surface-variant truncate">שלחתי לך את המיקום, תגיד לי כשתגיע.</p>
+</div>
+</div>
+</div>
+<!-- Read Chat -->
+<div class="flex items-center gap-4 px-container-padding py-md hover:bg-surface-container transition-colors cursor-pointer border-b border-surface-container-low">
+<div class="shrink-0">
+<img alt="" class="w-14 h-14 rounded-full object-cover" data-alt="portrait of a woman with vibrant energy, bright outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfVnTXmxWN6INmPMc1HNF4eIUIFUFIVvpCpCF_PHMEfNiOW4s6jd61a2iwGmlCnR4ROz1R0FWSfyPnlVv9bRFSsXDX1CUumMGPOc2mQ_hOZTXxop3IvgtGjYm8TGY0dU_AfoGthxhEmXobNNGL74JYnR0id_FauzyccNxN8biCrBBdu8r6HWgBLm2v-0aF1v93kdVJXxlfibtWW8BMgbL-uXoNJjF6uyuFu4QEEgJcwdQSfFiShxY-TqDOEvreI4tcrOFJqblvo2Y"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-0.5">
+<h3 class="font-title-md text-title-md text-on-surface truncate">שני מזרחי</h3>
+<span class="font-label-sm text-outline">03 נוב׳</span>
+</div>
+<div class="flex items-center gap-1">
+<p class="font-body-md text-on-surface-variant truncate">שלחתי לך הצעה חדשה על הספה.</p>
+</div>
+</div>
+</div>
+<!-- Read Chat -->
+<div class="flex items-center gap-4 px-container-padding py-md hover:bg-surface-container transition-colors cursor-pointer">
+<div class="shrink-0">
+<div class="w-14 h-14 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-baseline mb-0.5">
+<h3 class="font-title-md text-title-md text-on-surface truncate">קהילת מעצבי פנים</h3>
+<span class="font-label-sm text-outline">01 נוב׳</span>
+</div>
+<p class="font-body-md text-on-surface-variant truncate"><span class="font-semibold">אביב:</span> מישהו יודע איפה אפשר למצוא מנורות וינטג'?</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 h-20 px-4 flex justify-around items-center z-50 flex-row-reverse bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_20px_0px_rgba(0,0,0,0.04)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-slate-400 hover:text-[#00C2CB] transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-medium">בית</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 hover:text-[#00C2CB] transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-medium">קבוצות</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 hover:text-[#00C2CB] transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="add_box">add_box</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-medium">פרסום</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#00C2CB] font-bold transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="chat" style="font-variation-settings: 'FILL' 1;">chat</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-medium">הודעות</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 hover:text-[#00C2CB] transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-medium">פרופיל</span>
+</a>
+</nav>
+<!-- Floating Action Button for New Chat -->
+<button class="fixed bottom-24 left-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 z-40">
+<span class="material-symbols-outlined text-3xl" data-icon="add_comment" style="font-variation-settings: 'FILL' 1;">add_comment</span>
+</button>
+</body></html>
