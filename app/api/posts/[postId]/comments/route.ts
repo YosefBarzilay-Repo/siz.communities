@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { addComment, getComments, getGroupById, getPostById, isSuperUserUser } from "@/lib/store";
+import { addComment, getComments, getGroupById, getPostById, isGroupMemberWriteBlocked, isSuperUserUser } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -40,6 +40,9 @@ export async function POST(request: NextRequest, context: Params) {
   }
   if ((group.isDisabled || group.isLocked || post.isLocked || post.isDisabled) && !isSuperUserUser(user)) {
     return NextResponse.json({ error: "Thread is disabled" }, { status: 423 });
+  }
+  if (isGroupMemberWriteBlocked(group, user.id) && !isSuperUserUser(user) && group.adminId !== user.id) {
+    return NextResponse.json({ error: "You cannot write in this group" }, { status: 423 });
   }
 
   const body = await request.json();

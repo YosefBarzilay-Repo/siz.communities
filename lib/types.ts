@@ -22,6 +22,7 @@ export type Group = {
   description: string;
   adminId: string;
   memberIds: string[];
+  writeBlockedMemberIds: string[];
   isLocked: boolean;
   isDisabled: boolean;
   requiresApproval: boolean;

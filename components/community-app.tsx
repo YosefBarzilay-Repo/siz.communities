@@ -11,7 +11,7 @@ type AppData = BootstrapPayload & {
   currentUserDetail: PublicUser | null;
 };
 
-type View = "groups" | "group" | "join" | "create" | "profile";
+type View = "groups" | "group" | "join" | "create" | "profile" | "group-settings";
 
 const emptyData: AppData = {
   currentUser: null,
@@ -41,6 +41,30 @@ const clearStoredToken = () => {
   window.localStorage.removeItem(tokenStorageKey);
 };
 
+const errorMessageMap: Record<string, string> = {
+  "An error occurred": "אירעה שגיאה",
+  "Not authenticated": "נדרש להתחבר",
+  "Not allowed": "אין הרשאה",
+  "Group not found": "הקבוצה לא נמצאה",
+  "Thread not found": "הפוסט לא נמצא",
+  "User not found": "המשתמש לא נמצא",
+  "Thread is disabled": "השרשור לא זמין",
+  "Comment text is required": "נדרשת הודעת תגובה",
+  "Parent comment not found": "התשובה שמצאת לא קיימת",
+  "Missing user": "חסר משתמש",
+  "Missing group or text": "חסרה קבוצה או תוכן",
+  "Group is disabled": "הקבוצה הושבתה",
+  "Join approval required": "נדרש אישור להצטרפות",
+  "Invalid input": "קלט לא תקין",
+  "Invalid credentials": "פרטי התחברות לא תקינים",
+  "Email already exists": "האימייל כבר קיים",
+  "Group name is required": "נדרש שם לקבוצה",
+  EMAIL_TAKEN: "האימייל כבר קיים",
+  "You cannot write in this group": "אין לך אפשרות לכתוב בקבוצה הזו"
+};
+
+const translateError = (message: string) => errorMessageMap[message] ?? message;
+
 const api = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   const storedToken = readStoredToken();
   const requestUrl =
@@ -60,7 +84,7 @@ const api = async <T,>(url: string, init?: RequestInit): Promise<T> => {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || "An error occurred");
+    throw new Error(translateError(payload.error || "An error occurred"));
   }
 
   return payload as T;
@@ -110,6 +134,14 @@ export default function CommunityApp() {
   const [postImage, setPostImage] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [groupSettingsForm, setGroupSettingsForm] = useState({
+    name: "",
+    category: "",
+    description: "",
+    requiresApproval: false,
+    isLocked: false,
+    isDisabled: false
+  });
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [messageText, setMessageText] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -156,6 +188,7 @@ export default function CommunityApp() {
   const activeReplyComment = replyTargetCommentId ? data.comments.find((comment) => comment.id === replyTargetCommentId) ?? null : null;
   const activeReplyAuthor = activeReplyComment ? userById(activeReplyComment.userId) : activeReplyPost ? userById(activeReplyPost.userId) : null;
   const canManageGroup = Boolean(currentUser && selectedGroup && (isSuperUser || currentUser.id === selectedGroup.adminId));
+  const canManageSelectedGroupUsers = canManageGroup;
   const canAccessSelectedGroup = Boolean(
     selectedGroup && (isSuperUser || selectedGroup.adminId === currentUser?.id || selectedGroup.memberIds.includes(currentUser?.id ?? ""))
   );
@@ -292,6 +325,18 @@ export default function CommunityApp() {
     }
   }, [canAccessSelectedGroup, selectedGroup, selectedGroupId]);
 
+  useEffect(() => {
+    if (!selectedGroup) return;
+    setGroupSettingsForm({
+      name: selectedGroup.name,
+      category: selectedGroup.category,
+      description: selectedGroup.description,
+      requiresApproval: selectedGroup.requiresApproval,
+      isLocked: selectedGroup.isLocked,
+      isDisabled: selectedGroup.isDisabled
+    });
+  }, [selectedGroup]);
+
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -397,6 +442,32 @@ export default function CommunityApp() {
     await api(`/api/groups/${groupId}`, {
       method: "PATCH",
       body: JSON.stringify({ isDisabled: disabled })
+    });
+    await refresh();
+  };
+
+  const handleSaveGroupSettings = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedGroup) return;
+    await api(`/api/groups/${selectedGroup.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(groupSettingsForm)
+    });
+    await refresh();
+    setView("group");
+  };
+
+  const handleRemoveGroupMember = async (userId: string) => {
+    if (!selectedGroup) return;
+    await api(`/api/groups/${selectedGroup.id}/members/${userId}`, { method: "DELETE" });
+    await refresh();
+  };
+
+  const handleToggleGroupMemberWriteBlocked = async (userId: string, blocked: boolean) => {
+    if (!selectedGroup) return;
+    await api(`/api/groups/${selectedGroup.id}/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ blocked })
     });
     await refresh();
   };
@@ -524,7 +595,7 @@ export default function CommunityApp() {
   };
 
   if (loading) {
-    return <div className="flex min-h-[100dvh] items-center justify-center">Loading</div>;
+    return <div className="flex min-h-[100dvh] items-center justify-center">טוען...</div>;
   }
 
   if (!currentUser) {
@@ -544,14 +615,14 @@ export default function CommunityApp() {
               onClick={() => setAuthMode("login")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "login" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              Login
+              התחברות
             </button>
             <button
               type="button"
               onClick={() => setAuthMode("register")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "register" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              Register
+              הרשמה
             </button>
           </div>
 
@@ -562,17 +633,17 @@ export default function CommunityApp() {
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="Email"
+                placeholder="אימייל"
               />
               <input
                 value={loginForm.password}
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="Password"
+                placeholder="סיסמה"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                Login
+                התחברות
               </button>
             </form>
           ) : (
@@ -582,24 +653,24 @@ export default function CommunityApp() {
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
                 type="text"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="Name"
+                placeholder="שם"
               />
               <input
                 value={registerForm.email}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="Email"
+                placeholder="אימייל"
               />
               <input
                 value={registerForm.password}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="Password"
+                placeholder="סיסמה"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                Register
+                הרשמה
               </button>
             </form>
           )}
@@ -649,9 +720,9 @@ export default function CommunityApp() {
       <main className="flex min-h-0 flex-1 flex-col px-3 py-3">
         {!hasSeenIntro ? (
           <ShellCard className="mb-4 p-4 text-right">
-            <div className="text-lg font-bold text-text">Welcome to SIZ</div>
+            <div className="text-lg font-bold text-text">ברוכים הבאים ל-SIZ</div>
             <div className="mt-2 text-sm leading-6 text-text-muted">
-              Create and join community groups, post items, reply to threads, and send private messages.
+              צרו והצטרפו לקבוצות קהילה, פרסמו פריטים, השיבו לשרשורים ושלחו הודעות פרטיות.
             </div>
             <button
               type="button"
@@ -663,27 +734,27 @@ export default function CommunityApp() {
               }}
               className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
             >
-              Continue
+              המשך
             </button>
           </ShellCard>
         ) : null}
 
         {isWriteBlockedUser ? (
           <ShellCard className="mb-4 p-4 text-right">
-            <div className="text-lg font-bold text-danger">Write access blocked</div>
-            <div className="mt-1 text-sm text-text-muted">Your account is disabled or locked, so you can only browse content.</div>
+            <div className="text-lg font-bold text-danger">כתיבה חסומה</div>
+            <div className="mt-1 text-sm text-text-muted">החשבון שלך נעול או מושבת, ולכן אפשר רק לצפות בתוכן.</div>
           </ShellCard>
         ) : null}
 
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
             <div className="flex items-center justify-between">
-                <div className="text-lg font-bold text-text">My groups</div>
+                <div className="text-lg font-bold text-text">הקבוצות שלי</div>
               <button
                 type="button"
                 onClick={() => setView("join")}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-sm"
-                title="Add group"
+                title="הוספת קבוצה"
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -708,23 +779,23 @@ export default function CommunityApp() {
                   <div className="flex items-center justify-between">
                     <div className="text-lg font-bold text-text">{group.name}</div>
                     <div className="flex items-center gap-2 text-text-muted">
-                      {group.isDisabled ? <Ban className="h-4 w-4" aria-label="disabled" /> : null}
-                      {group.isLocked ? <Lock className="h-4 w-4" aria-label="locked" /> : null}
-                        {isSuperUser || group.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
+                      {group.isDisabled ? <Ban className="h-4 w-4" aria-label="מושבת" /> : null}
+                      {group.isLocked ? <Lock className="h-4 w-4" aria-label="נעול" /> : null}
+                      {isSuperUser || group.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="מנהל" /> : null}
                     </div>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
                     <span className="inline-flex items-center gap-1">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      {userById(group.adminId)?.username ?? "Admin"}
+                      {userById(group.adminId)?.username ?? "מנהל"}
                     </span>
-                    {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
+                    {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />נדרש אישור</span> : null}
                   </div>
                 </button>
               ))}
               {!joinedGroups.length ? (
                 <ShellCard className="p-4 text-right">
-                  <div className="text-lg font-bold text-text">No joined groups yet</div>
+                  <div className="text-lg font-bold text-text">עדיין אין קבוצות משויכות</div>
                 </ShellCard>
               ) : null}
             </div>
@@ -741,7 +812,7 @@ export default function CommunityApp() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <div className="text-lg font-bold text-text">All groups</div>
+               <div className="text-lg font-bold text-text">כל הקבוצות</div>
               <button
                 type="button"
                 onClick={() => setView("create")}
@@ -759,11 +830,11 @@ export default function CommunityApp() {
                                             <div className="mt-1 flex flex-wrap gap-2 text-xs text-text-muted">
                         <span className="inline-flex items-center gap-1">
                           <ShieldCheck className="h-3.5 w-3.5" />
-                          {userById(group.adminId)?.username ?? "Admin"}
+                          {userById(group.adminId)?.username ?? "מנהל"}
                         </span>
-                        {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
-                        {group.isLocked ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Locked</span> : null}
-                        {group.isDisabled ? <span className="inline-flex items-center gap-1"><Ban className="h-3.5 w-3.5" />Disabled</span> : null}
+                        {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />נדרש אישור</span> : null}
+                        {group.isLocked ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />נעול</span> : null}
+                        {group.isDisabled ? <span className="inline-flex items-center gap-1"><Ban className="h-3.5 w-3.5" />מושבת</span> : null}
                       </div>
                     </div>
                     <button
@@ -771,7 +842,7 @@ export default function CommunityApp() {
                       onClick={() => handleJoinGroup(group.id)}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                       disabled={isWriteBlockedUser}
-                      aria-label="join"
+                      aria-label="הצטרפות"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -780,7 +851,7 @@ export default function CommunityApp() {
               ))}
               {!availableGroups.length ? (
                 <ShellCard className="p-4 text-right">
-                  <div className="text-lg font-bold text-text">No more groups</div>
+                  <div className="text-lg font-bold text-text">אין עוד קבוצות</div>
                 </ShellCard>
               ) : null}
             </div>
@@ -789,18 +860,18 @@ export default function CommunityApp() {
 
         {view === "create" ? (
           <form className="flex-1 space-y-3 rounded-2xl bg-white p-4 shadow-card" onSubmit={handleCreateGroup}>
-            <div className="text-lg font-bold text-text">Create group</div>
+            <div className="text-lg font-bold text-text">יצירת קבוצה</div>
             <input
               value={newGroup.name}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, name: event.target.value }))}
               className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="Group name"
+              placeholder="שם קבוצה"
             />
             <textarea
               value={newGroup.description}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, description: event.target.value }))}
               className="min-h-28 w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="Description"
+              placeholder="תיאור"
             />
             <label className="flex items-center gap-2 text-sm text-text">
               <input
@@ -808,10 +879,10 @@ export default function CommunityApp() {
                 checked={newGroup.requiresApproval}
                 onChange={(event) => setNewGroup((prev) => ({ ...prev, requiresApproval: event.target.checked }))}
               />
-              Requires approval to join
+              נדרש אישור להצטרפות
             </label>
             <button type="submit" className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={isWriteBlockedUser}>
-              Create
+              יצירה
             </button>
           </form>
         ) : null}
@@ -828,9 +899,9 @@ export default function CommunityApp() {
                   type="button"
                   onClick={() =>
                     askConfirm({
-                      title: "Log out",
-                      description: "Sign out of this account?",
-                      confirmLabel: "Log out",
+                      title: "התנתקות",
+                      description: "להתנתק מהחשבון הזה?",
+                      confirmLabel: "התנתקות",
                       onConfirm: handleLogout
                     })
                   }
@@ -842,7 +913,7 @@ export default function CommunityApp() {
             </ShellCard>
 
             <ShellCard className="p-4 text-right">
-              <div className="mb-3 text-lg font-bold text-text">Notifications</div>
+                <div className="mb-3 text-lg font-bold text-text">התראות</div>
               <div className="space-y-2">
                 {recentNotifications.map((message) => {
                   const sender = userById(message.senderId);
@@ -853,22 +924,22 @@ export default function CommunityApp() {
                       onClick={() => openPrivateMessage(message.senderId)}
                       className="w-full rounded-2xl bg-surface-soft px-3 py-2 text-right"
                     >
-                      <div className="text-sm font-semibold text-text">{sender?.username ?? "User"}</div>
+                      <div className="text-sm font-semibold text-text">{sender?.username ?? "משתמש"}</div>
                       <div className="text-sm text-text-muted">{message.text}</div>
                     </button>
                   );
                 })}
-                {!recentNotifications.length ? <div className="text-sm text-text-muted">No notifications</div> : null}
+                {!recentNotifications.length ? <div className="text-sm text-text-muted">אין התראות</div> : null}
               </div>
             </ShellCard>
 
             <ShellCard className="p-4 text-right">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-lg font-bold text-text">Private messages</div>
-                <div className="text-xs text-text-muted">Tap a name to open a chat</div>
+                <div className="text-lg font-bold text-text">הודעות פרטיות</div>
+                <div className="text-xs text-text-muted">לחצו על שם כדי לפתוח שיחה</div>
               </div>
               <div className="mb-3">
-                <div className="mb-2 text-xs font-semibold text-text-muted">Members</div>
+                <div className="mb-2 text-xs font-semibold text-text-muted">חברים</div>
                 <div className="flex flex-wrap gap-2">
                   {groupContacts.map((partner) => (
                     <button
@@ -882,7 +953,7 @@ export default function CommunityApp() {
                       {partner.username}
                     </button>
                   ))}
-                  {!groupContacts.length ? <div className="text-sm text-text-muted">Join a group to find people</div> : null}
+                  {!groupContacts.length ? <div className="text-sm text-text-muted">הצטרפו לקבוצה כדי למצוא אנשים</div> : null}
                 </div>
               </div>
               <div className="mb-3 flex flex-wrap gap-2">
@@ -898,7 +969,7 @@ export default function CommunityApp() {
                     {partner.username}
                   </button>
                   ))}
-                {!messagePartners.length ? <div className="text-sm text-text-muted">No chats yet</div> : null}
+                {!messagePartners.length ? <div className="text-sm text-text-muted">אין שיחות עדיין</div> : null}
               </div>
 
               <div className="rounded-2xl bg-surface-soft p-3">
@@ -916,7 +987,7 @@ export default function CommunityApp() {
                             mine ? "mr-auto bg-primary text-white" : "ml-auto bg-white text-text"
                           }`}
                         >
-                          <div className="text-xs font-semibold opacity-80">{mine ? "You" : sender?.username ?? "User"}</div>
+                          <div className="text-xs font-semibold opacity-80">{mine ? "אני" : sender?.username ?? "משתמש"}</div>
                           <div className="mt-1">{message.text}</div>
                           <div className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-text-muted"}`}>
                             {dateTimeLabel(message.createdAt)}
@@ -925,7 +996,7 @@ export default function CommunityApp() {
                       );
                     })
                   ) : (
-                    <div className="text-sm text-text-muted">Choose a person to start chatting</div>
+                    <div className="text-sm text-text-muted">בחרו אדם כדי להתחיל שיחה</div>
                   )}
                 </div>
                 <form onSubmit={handleSendMessage} className="space-y-2">
@@ -933,7 +1004,7 @@ export default function CommunityApp() {
                     value={messageText}
                     onChange={(event) => setMessageText(event.target.value)}
                     className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                    placeholder={selectedPartner ? `Message ${selectedPartner.username}` : "Choose a person first"}
+                    placeholder={selectedPartner ? `הודעה ל-${selectedPartner.username}` : "בחרו אדם תחילה"}
                     disabled={!selectedPartner}
                   />
                   <button
@@ -948,12 +1019,12 @@ export default function CommunityApp() {
               </div>
             </ShellCard>
 
-            {data.groups.length ? (
-              <ShellCard className="p-4 text-right">
-                <div className="mb-3 text-lg font-bold text-text">Admin panel</div>
+            {false ? (
+            <ShellCard className="p-4 text-right">
+                <div className="mb-3 text-lg font-bold text-text">לוח ניהול</div>
                 <div className="space-y-4">
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold text-text">Groups</div>
+                    <div className="text-sm font-semibold text-text">קבוצות</div>
                     {data.groups.map((group) => (
                       <div key={group.id} className="rounded-2xl bg-surface-soft p-3">
                         <div className="flex items-center justify-between gap-3">
@@ -961,11 +1032,11 @@ export default function CommunityApp() {
                             <div className="font-semibold text-text">{group.name}</div>
                             <div className="text-xs text-text-muted inline-flex items-center gap-1">
                               <ShieldCheck className="h-3.5 w-3.5" />
-                              {userById(group.adminId)?.username ?? "Admin"}
+                              {userById(group.adminId)?.username ?? "מנהל"}
                             </div>
                             <div className="text-xs text-text-muted">
-                              {group.requiresApproval ? "Approval required" : "Open group"}
-                              {group.isLocked ? " · Locked" : ""}
+                              {group.requiresApproval ? "נדרש אישור" : "קבוצה פתוחה"}
+                              {group.isLocked ? " · נעולה" : ""}
                             </div>
                           </div>
                         {isSuperUser || group.adminId === currentUser?.id ? (
@@ -974,14 +1045,14 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: group.isLocked ? "Unlock group" : "Lock group",
-                                description: group.isLocked ? "Allow writing in this group?" : "Make this group read only?",
-                                confirmLabel: group.isLocked ? "Unlock" : "Lock",
+                                title: group.isLocked ? "שחרור קבוצה" : "נעילת קבוצה",
+                                description: group.isLocked ? "לאפשר כתיבה בקבוצה הזו?" : "להפוך את הקבוצה לקריאה בלבד?",
+                                confirmLabel: group.isLocked ? "שחרור" : "נעילה",
                                 onConfirm: () => handleToggleGroupLock(group.id, !group.isLocked)
                               })
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                            aria-label="toggle group lock"
+                            aria-label="החלפת נעילת קבוצה"
                           >
                             {group.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                           </button>
@@ -989,14 +1060,14 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: group.isDisabled ? "Enable group" : "Disable group",
-                                description: group.isDisabled ? "Restore this group?" : "Disable this group?",
-                                confirmLabel: group.isDisabled ? "Enable" : "Disable",
+                                title: group.isDisabled ? "הפעלת קבוצה" : "השבתת קבוצה",
+                                description: group.isDisabled ? "להחזיר את הקבוצה לפעילות?" : "להשבית את הקבוצה?",
+                                confirmLabel: group.isDisabled ? "הפעלה" : "השבתה",
                                 onConfirm: () => handleToggleGroupDisabled(group.id, !group.isDisabled)
                               })
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                            aria-label="toggle group disabled"
+                            aria-label="החלפת השבתת קבוצה"
                           >
                             <Ban className="h-4 w-4" />
                           </button>
@@ -1004,9 +1075,9 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: "Delete group",
-                                description: "Delete this group and all its threads?",
-                                confirmLabel: "Delete",
+                                title: "מחיקת קבוצה",
+                                description: "למחוק את הקבוצה ואת כל השרשורים שלה?",
+                                confirmLabel: "מחיקה",
                                 onConfirm: () => handleDeleteGroup(group.id)
                               })
                             }
@@ -1017,7 +1088,7 @@ export default function CommunityApp() {
                           </button>
                         </div>
                         ) : (
-                          <div className="text-xs text-text-muted">Read only</div>
+                          <div className="text-xs text-text-muted">קריאה בלבד</div>
                         )}
                         </div>
                         {isSuperUser || group.adminId === currentUser?.id ? (
@@ -1027,13 +1098,13 @@ export default function CommunityApp() {
                             return (
                               <div key={userId} className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs">
                                 <button type="button" className="font-semibold text-text" onClick={() => openPrivateMessage(userId)}>
-                                  {pendingUser?.username ?? "User"}
+                                  {pendingUser?.username ?? "משתמש"}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleApproveJoin(group.id, userId)}
                                   className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white"
-                                  aria-label="approve"
+                                  aria-label="אישור"
                                 >
                                   <Check className="h-4 w-4" />
                                 </button>
@@ -1041,7 +1112,7 @@ export default function CommunityApp() {
                                   type="button"
                                   onClick={() => handleRejectJoin(group.id, userId)}
                                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-danger"
-                                  aria-label="reject"
+                                  aria-label="דחייה"
                                 >
                                   <X className="h-4 w-4" />
                                 </button>
@@ -1055,26 +1126,26 @@ export default function CommunityApp() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold text-text">Users</div>
+                    <div className="text-sm font-semibold text-text">משתמשים</div>
                     {adminUsers.map((user) => (
                       <div key={user.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-soft px-3 py-2">
                         <button type="button" onClick={() => openPrivateMessage(user.id)} className="text-right">
                           <div className="font-semibold text-text">{user.username}</div>
-                            <div className="text-xs text-text-muted">{user.isDisabled ? "Disabled" : user.isLocked ? "Locked" : "Active"}</div>
+                            <div className="text-xs text-text-muted">{user.isDisabled ? "מושבת" : user.isLocked ? "נעול" : "פעיל"}</div>
                         </button>
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: user.isLocked ? "Unlock user" : "Lock user",
-                                description: user.isLocked ? "Allow this user to write again?" : "Make this user read only?",
-                                confirmLabel: user.isLocked ? "Unlock" : "Lock",
+                                title: user.isLocked ? "שחרור משתמש" : "נעילת משתמש",
+                                description: user.isLocked ? "לאפשר למשתמש הזה לכתוב שוב?" : "להפוך את המשתמש לקריאה בלבד?",
+                                confirmLabel: user.isLocked ? "שחרור" : "נעילה",
                                 onConfirm: () => handleToggleUserLock(user.id, !user.isLocked)
                               })
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                            aria-label="toggle user lock"
+                            aria-label="החלפת נעילת משתמש"
                           >
                             {user.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                           </button>
@@ -1082,14 +1153,14 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: user.isDisabled ? "Enable user" : "Disable user",
-                                description: user.isDisabled ? "Allow this user to write again?" : "Disable this user?",
-                                confirmLabel: user.isDisabled ? "Enable" : "Disable",
+                                title: user.isDisabled ? "הפעלת משתמש" : "השבתת משתמש",
+                                description: user.isDisabled ? "להחזיר את המשתמש לפעילות?" : "להשבית את המשתמש?",
+                                confirmLabel: user.isDisabled ? "הפעלה" : "השבתה",
                                 onConfirm: () => handleToggleUserDisabled(user.id, !user.isDisabled)
                               })
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                            aria-label="toggle user disabled"
+                            aria-label="החלפת השבתת משתמש"
                           >
                             <Ban className="h-4 w-4" />
                           </button>
@@ -1097,14 +1168,14 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() =>
                               askConfirm({
-                                title: "Delete user",
-                                description: "Delete this user and their content?",
-                                confirmLabel: "Delete",
+                                title: "מחיקת משתמש",
+                                description: "למחוק את המשתמש ואת התוכן שלו?",
+                                confirmLabel: "מחיקה",
                                 onConfirm: () => handleDeleteUser(user.id)
                               })
                             }
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-danger"
-                            aria-label="delete user"
+                            aria-label="מחיקת משתמש"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1114,7 +1185,7 @@ export default function CommunityApp() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold text-text">Threads</div>
+                    <div className="text-sm font-semibold text-text">שרשורים</div>
                     {adminPosts.map((post) => {
                       const postGroup = data.groups.find((group) => group.id === post.groupId);
                       const author = userById(post.userId);
@@ -1122,52 +1193,52 @@ export default function CommunityApp() {
                         <div key={post.id} className="rounded-2xl bg-surface-soft p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="font-semibold text-text">{author?.username ?? "User"}</div>
-                              <div className="text-xs text-text-muted">{postGroup?.name ?? "Group"}</div>
+                              <div className="font-semibold text-text">{author?.username ?? "משתמש"}</div>
+                              <div className="text-xs text-text-muted">{postGroup?.name ?? "קבוצה"}</div>
                             </div>
                             <div className="flex gap-2">
                               <button
                                 type="button"
                                 onClick={() =>
-                                  askConfirm({
-                                    title: post.isLocked ? "Unlock thread" : "Lock thread",
-                                    description: post.isLocked ? "Allow comments on this thread?" : "Stop comments on this thread?",
-                                    confirmLabel: post.isLocked ? "Unlock" : "Lock",
+                                askConfirm({
+                                    title: post.isLocked ? "שחרור שרשור" : "נעילת שרשור",
+                                    description: post.isLocked ? "לאפשר תגובות בשרשור הזה?" : "להפסיק תגובות בשרשור הזה?",
+                                    confirmLabel: post.isLocked ? "שחרור" : "נעילה",
                                     onConfirm: () => handleTogglePostLock(post.id, !post.isLocked)
                                   })
                                 }
                                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                                aria-label="toggle thread lock"
+                            aria-label="החלפת נעילת שרשור"
                               >
                                 {post.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                               </button>
                               <button
                                 type="button"
                                 onClick={() =>
-                                  askConfirm({
-                                    title: post.isDisabled ? "Enable thread" : "Disable thread",
-                                    description: post.isDisabled ? "Restore comments on this thread?" : "Disable this thread?",
-                                    confirmLabel: post.isDisabled ? "Enable" : "Disable",
+                                askConfirm({
+                                    title: post.isDisabled ? "הפעלת שרשור" : "השבתת שרשור",
+                                    description: post.isDisabled ? "להחזיר את התגובות בשרשור הזה?" : "להשבית את השרשור הזה?",
+                                    confirmLabel: post.isDisabled ? "הפעלה" : "השבתה",
                                     onConfirm: () => handleTogglePostDisabled(post.id, !post.isDisabled)
                                   })
                                 }
                                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
-                                aria-label="toggle thread disabled"
+                            aria-label="החלפת השבתת שרשור"
                               >
                                 <Ban className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() =>
-                                  askConfirm({
-                                    title: "Delete thread",
-                                    description: "Delete this thread and its comments?",
-                                    confirmLabel: "Delete",
+                                askConfirm({
+                                    title: "מחיקת שרשור",
+                                    description: "למחוק את השרשור הזה ואת התגובות שלו?",
+                                    confirmLabel: "מחיקה",
                                     onConfirm: () => handleDeletePost(post.id)
                                   })
                                 }
                                 className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-danger"
-                                aria-label="delete thread"
+                            aria-label="מחיקת שרשור"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -1183,61 +1254,194 @@ export default function CommunityApp() {
           </div>
         ) : null}
 
+        {view === "group-settings" && selectedGroup && canManageGroup ? (
+          <div className="flex-1 space-y-3">
+            <ShellCard className="p-4 text-right">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-bold text-text">ניהול קבוצה</div>
+                  <div className="mt-1 text-sm text-text-muted">{selectedGroup.name}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setView("group")}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-soft text-text"
+                  aria-label="חזרה לקבוצה"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              </div>
+
+              <form className="mt-4 space-y-3" onSubmit={handleSaveGroupSettings}>
+                <input
+                  value={groupSettingsForm.name}
+                  onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, name: event.target.value }))}
+                  className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
+                  placeholder="שם קבוצה"
+                />
+                <input
+                  value={groupSettingsForm.category}
+                  onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, category: event.target.value }))}
+                  className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
+                  placeholder="קטגוריה"
+                />
+                <textarea
+                  value={groupSettingsForm.description}
+                  onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, description: event.target.value }))}
+                  className="min-h-28 w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
+                  placeholder="תיאור"
+                />
+
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={groupSettingsForm.requiresApproval}
+                    onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, requiresApproval: event.target.checked }))}
+                  />
+                  נדרש אישור להצטרפות
+                </label>
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={groupSettingsForm.isLocked}
+                    onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, isLocked: event.target.checked }))}
+                  />
+                  נעילת כתיבה בקבוצה
+                </label>
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={groupSettingsForm.isDisabled}
+                    onChange={(event) => setGroupSettingsForm((prev) => ({ ...prev, isDisabled: event.target.checked }))}
+                  />
+                  השבתת הקבוצה
+                </label>
+
+                <div className="flex gap-3">
+                  <button type="submit" className="flex-1 rounded-full bg-primary px-4 py-3 font-semibold text-white">
+                    שמירה
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      askConfirm({
+                        title: "מחיקת קבוצה",
+                        description: "למחוק את הקבוצה ואת כל ההודעות שלה?",
+                        confirmLabel: "מחיקה",
+                        onConfirm: () => handleDeleteGroup(selectedGroup.id)
+                      })
+                    }
+                    className="flex-1 rounded-full bg-red-50 px-4 py-3 font-semibold text-danger"
+                  >
+                    מחיקת קבוצה
+                  </button>
+                </div>
+              </form>
+            </ShellCard>
+
+            <ShellCard className="p-4 text-right">
+                    <div className="text-sm font-semibold text-text">בקשות הצטרפות</div>
+              {selectedGroup.requiresApproval && data.joinRequests.some((request) => request.groupId === selectedGroup.id) ? (
+                <div className="mt-3 space-y-2">
+                  {data.joinRequests.filter((request) => request.groupId === selectedGroup.id).map((request) => {
+                    const pendingUser = userById(request.userId);
+                    return (
+                      <div key={request.id} className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2">
+                        <button type="button" onClick={() => openPrivateMessage(request.userId)} className="text-right text-sm font-semibold text-text">
+                          {pendingUser?.username ?? "משתמש"}
+                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApproveJoin(selectedGroup.id, request.userId)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white"
+                            aria-label="אישור"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectJoin(selectedGroup.id, request.userId)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-danger"
+                            aria-label="דחייה"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-text-muted">אין בקשות כרגע</div>
+              )}
+            </ShellCard>
+
+            <ShellCard className="p-4 text-right">
+              <div className="text-sm font-semibold text-text">חברי הקבוצה</div>
+              <div className="mt-3 space-y-2">
+                {selectedGroup.memberIds.map((memberId) => {
+                  const member = userById(memberId);
+                  const writeBlocked = selectedGroup.writeBlockedMemberIds.includes(memberId);
+                  const isSelf = memberId === currentUser?.id;
+                  return (
+                    <div key={memberId} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-soft px-3 py-2">
+                      <button type="button" onClick={() => openPrivateMessage(memberId)} className="text-right">
+                        <div className="font-semibold text-text">{member?.username ?? "משתמש"}</div>
+                        <div className="text-xs text-text-muted">{writeBlocked ? "חסום לכתיבה" : "יכול לכתוב"}</div>
+                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleGroupMemberWriteBlocked(memberId, !writeBlocked)}
+                          className="flex h-8 items-center justify-center rounded-full bg-white px-3 text-xs font-semibold text-text disabled:opacity-50"
+                          disabled={isSelf}
+                        >
+                          {writeBlocked ? "שחרור כתיבה" : "חסום כתיבה"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            askConfirm({
+                              title: "הסרת חבר",
+                              description: `להסיר את ${member?.username ?? "המשתמש"} מהקבוצה?`,
+                              confirmLabel: "הסרה",
+                              onConfirm: () => handleRemoveGroupMember(memberId)
+                            })
+                          }
+                          className="flex h-8 items-center justify-center rounded-full bg-red-50 px-3 text-xs font-semibold text-danger disabled:opacity-50"
+                          disabled={isSelf}
+                        >
+                          הסר
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+
         {view === "group" && selectedGroup && canAccessSelectedGroup ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="text-lg font-bold text-text">{selectedGroup.name}</div>
-                {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" aria-label="locked" /> : null}
-                {selectedGroup.isDisabled ? <Ban className="h-4 w-4 text-text-muted" aria-label="disabled" /> : null}
-                {isSuperUser || selectedGroup.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
+                 {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" aria-label="נעול" /> : null}
+                {selectedGroup.isDisabled ? <Ban className="h-4 w-4 text-text-muted" aria-label="מושבת" /> : null}
+                {isSuperUser || selectedGroup.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="מנהל" /> : null}
               </div>
               <div className="flex items-center gap-2">
                 {canManageGroup ? (
                   <>
                     <button
                       type="button"
-                      onClick={() =>
-                        askConfirm({
-                          title: selectedGroup.isLocked ? "Unlock group" : "Lock group",
-                          description: selectedGroup.isLocked ? "Allow writing in this group?" : "Make this group read only?",
-                          confirmLabel: selectedGroup.isLocked ? "Unlock" : "Lock",
-                          onConfirm: () => handleToggleGroupLock(selectedGroup.id, !selectedGroup.isLocked)
-                        })
-                      }
+                      onClick={() => setView("group-settings")}
                       className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-soft text-text"
-                      aria-label="toggle group lock"
+                            aria-label="ניהול קבוצה"
                     >
-                      {selectedGroup.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        askConfirm({
-                          title: selectedGroup.isDisabled ? "Enable group" : "Disable group",
-                          description: selectedGroup.isDisabled ? "Restore writing in this group?" : "Disable this group?",
-                          confirmLabel: selectedGroup.isDisabled ? "Enable" : "Disable",
-                          onConfirm: () => handleToggleGroupDisabled(selectedGroup.id, !selectedGroup.isDisabled)
-                        })
-                      }
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-soft text-text"
-                      aria-label="toggle group disabled"
-                    >
-                      <Ban className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        askConfirm({
-                          title: "Delete group",
-                          description: "Delete this group and all its threads?",
-                          confirmLabel: "Delete",
-                          onConfirm: () => handleDeleteGroup(selectedGroup.id)
-                        })
-                      }
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
+                      <ShieldCheck className="h-4 w-4" />
                     </button>
                   </>
                 ) : null}
@@ -1245,9 +1449,9 @@ export default function CommunityApp() {
                   type="button"
                   onClick={() =>
                     askConfirm({
-                      title: "Leave group",
-                      description: "Leave this group?",
-                      confirmLabel: "Leave",
+                      title: "עזיבת קבוצה",
+                      description: "לעזוב את הקבוצה הזו?",
+                      confirmLabel: "עזיבה",
                       onConfirm: () => handleLeaveGroup(selectedGroup.id)
                     })
                   }
@@ -1261,21 +1465,21 @@ export default function CommunityApp() {
             <div className="mb-3 flex items-center justify-between text-xs text-text-muted">
               <span className="inline-flex items-center gap-1">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                {selectedGroupAdmin?.username ?? "Admin"}
+                {selectedGroupAdmin?.username ?? "מנהל"}
               </span>
-              {selectedGroup.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
+                {selectedGroup.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />נדרש אישור</span> : null}
             </div>
 
             {canManageGroup && data.joinRequests.some((request) => request.groupId === selectedGroup.id) ? (
               <ShellCard className="mb-3 p-4 text-right">
-                <div className="text-sm font-semibold text-text">Join requests</div>
+                    <div className="text-sm font-semibold text-text">בקשות הצטרפות</div>
                 <div className="mt-3 space-y-2">
                   {data.joinRequests.filter((request) => request.groupId === selectedGroup.id).map((request) => {
                     const applicant = userById(request.userId);
                     return (
                       <div key={request.id} className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2">
                         <button type="button" onClick={() => openPrivateMessage(request.userId)} className="text-sm text-text">
-                          {applicant?.username ?? "User"}
+                          {applicant?.username ?? "משתמש"}
                         </button>
                         <div className="flex gap-2">
                           <button
@@ -1283,7 +1487,7 @@ export default function CommunityApp() {
                             onClick={() => handleApproveJoin(selectedGroup.id, request.userId)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                             disabled={isWriteBlockedUser}
-                            aria-label="approve"
+                            aria-label="אישור"
                           >
                             <Check className="h-4 w-4" />
                           </button>
@@ -1292,7 +1496,7 @@ export default function CommunityApp() {
                             onClick={() => handleRejectJoin(selectedGroup.id, request.userId)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-danger disabled:opacity-50"
                             disabled={isWriteBlockedUser}
-                            aria-label="reject"
+                            aria-label="דחייה"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -1334,7 +1538,7 @@ export default function CommunityApp() {
                           onClick={() => openPrivateMessage(comment.userId)}
                           className="text-xs font-semibold text-text"
                         >
-                          {commenter?.username ?? "User"}
+                          {commenter?.username ?? "משתמש"}
                         </button>
                         <div className="mt-1 text-sm text-text">{comment.text}</div>
                         <div className="mt-2 flex items-center justify-between gap-2">
@@ -1348,10 +1552,10 @@ export default function CommunityApp() {
                             }}
                             disabled={replyDisabled}
                             className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-semibold text-primary disabled:opacity-50"
-                            aria-label="reply to comment"
+                            aria-label="תגובה לתגובה"
                           >
                             <MessageCircle className="h-3.5 w-3.5" />
-                            Reply
+                            השב
                           </button>
                         </div>
                       </div>
@@ -1367,11 +1571,11 @@ export default function CommunityApp() {
                         onClick={() => openPrivateMessage(post.userId)}
                         className="text-sm font-semibold text-text"
                       >
-                        {author?.username ?? "User"}
+                        {author?.username ?? "משתמש"}
                       </button>
                       <div className="flex items-center gap-2 text-text-muted">
-                        {post.isDisabled ? <Ban className="h-4 w-4" aria-label="disabled" /> : null}
-                        {post.isLocked ? <Lock className="h-4 w-4" aria-label="locked" /> : null}
+                        {post.isDisabled ? <Ban className="h-4 w-4" aria-label="מושבת" /> : null}
+                        {post.isLocked ? <Lock className="h-4 w-4" aria-label="נעול" /> : null}
                       </div>
                     </div>
 
@@ -1394,7 +1598,7 @@ export default function CommunityApp() {
                         className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold ${
                           !canWriteInSelectedGroup || (!isSuperUser && (post.isLocked || post.isDisabled)) ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
                         }`}
-                        aria-label="comment"
+                        aria-label="תגובה"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </button>
@@ -1405,15 +1609,15 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() => handleTogglePostLock(post.id, !post.isLocked)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-soft text-text"
-                            aria-label="toggle thread lock"
+                            aria-label="החלפת נעילת שרשור"
                           >
-                            {post.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                {post.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleTogglePostDisabled(post.id, !post.isDisabled)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-soft text-text"
-                            aria-label="toggle thread disabled"
+                            aria-label="החלפת השבתת שרשור"
                           >
                             <Ban className="h-4 w-4" />
                           </button>
@@ -1421,7 +1625,7 @@ export default function CommunityApp() {
                             type="button"
                             onClick={() => handleDeletePost(post.id)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-danger"
-                            aria-label="delete thread"
+                            aria-label="מחיקת שרשור"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1441,9 +1645,9 @@ export default function CommunityApp() {
               {activeReplyPost ? (
                 <div className="mb-3 flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2 text-sm text-text">
                   <div className="truncate">
-                    Replying to {activeReplyComment ? "comment by " : ""}
-                    {activeReplyAuthor?.username ?? "thread"}
-                    {activeReplyPost.isLocked ? " · Locked" : ""}
+                    {activeReplyComment ? "תגובה על תגובה מאת " : "תגובה ל"}
+                    {activeReplyAuthor?.username ?? "שרשור"}
+                    {activeReplyPost.isLocked ? " · נעול" : ""}
                   </div>
                   <button
                     type="button"
@@ -1469,7 +1673,7 @@ export default function CommunityApp() {
                   }
                 }}
                 className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                placeholder={activeReplyPost ? "Write a reply" : "Write a post"}
+                placeholder={activeReplyPost ? "כתבו תגובה" : "כתבו פוסט"}
                 disabled={Boolean(!canWriteInSelectedGroup || (!isSuperUser && (activeReplyPost?.isLocked || activeReplyPost?.isDisabled)))}
               />
 
@@ -1490,7 +1694,7 @@ export default function CommunityApp() {
                         onChange={(event) => handleImageInput(event.target.files?.[0] ?? null)}
                       />
                     </label>
-                    <button type="submit" className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50" disabled={!canWriteInSelectedGroup} aria-label="publish">
+                    <button type="submit" className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50" disabled={!canWriteInSelectedGroup} aria-label="פרסום">
                       <Send className="h-4 w-4" />
                     </button>
                   </div>
@@ -1501,7 +1705,7 @@ export default function CommunityApp() {
                     type="submit"
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                     disabled={Boolean(!canWriteInSelectedGroup || (!isSuperUser && (activeReplyPost?.isLocked || activeReplyPost?.isDisabled)))}
-                    aria-label="comment"
+                    aria-label="תגובה"
                   >
                     <MessageCircle className="h-4 w-4" />
                   </button>
@@ -1513,8 +1717,8 @@ export default function CommunityApp() {
 
         {view === "group" && selectedGroup && !canAccessSelectedGroup ? (
           <ShellCard className="p-4 text-right">
-            <div className="text-lg font-bold text-text">Access denied</div>
-            <div className="mt-1 text-sm text-text-muted">This group is locked or you do not have permission to access it.</div>
+            <div className="text-lg font-bold text-text">הגישה נדחתה</div>
+            <div className="mt-1 text-sm text-text-muted">הקבוצה נעולה או שאין לך הרשאה להיכנס אליה.</div>
           </ShellCard>
         ) : null}
       </main>
@@ -1541,7 +1745,7 @@ export default function CommunityApp() {
                 onClick={() => setConfirmAction(null)}
                 className="flex-1 rounded-full bg-surface-soft px-4 py-3 font-semibold text-text"
               >
-                Cancel
+                ביטול
               </button>
               <button
                 type="button"

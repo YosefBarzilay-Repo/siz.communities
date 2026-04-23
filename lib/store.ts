@@ -30,6 +30,16 @@ export const isSuperUserUser = (user: Pick<User, "email" | "isSuperUser">) =>
 const normalizeUser = (user: User | null): User | null =>
   user ? { ...user, isSuperUser: isSuperUserUser(user) } : null;
 
+const normalizeGroup = (group: Group | null): Group | null =>
+  group
+    ? {
+        ...group,
+        memberIds: group.memberIds ?? [],
+        writeBlockedMemberIds: group.writeBlockedMemberIds ?? [],
+        pendingMemberIds: group.pendingMemberIds ?? []
+      }
+    : null;
+
 const omitPassword = ({ passwordHash, ...rest }: User): PublicUser => ({
   ...rest,
   isSuperUser: isSuperUserUser(rest)
@@ -51,7 +61,12 @@ declare global {
 
 const createMemoryState = (): MemoryState => ({
   users: seedUsers.map((user) => ({ ...user, joinedGroupIds: [...user.joinedGroupIds] })),
-  groups: seedData.groups.map((group) => ({ ...group, memberIds: [...group.memberIds], pendingMemberIds: [...group.pendingMemberIds] })),
+  groups: seedData.groups.map((group) => ({
+    ...group,
+    memberIds: [...group.memberIds],
+    writeBlockedMemberIds: [...group.writeBlockedMemberIds],
+    pendingMemberIds: [...group.pendingMemberIds]
+  })),
   posts: seedData.posts.map((post) => ({ ...post })),
   comments: seedData.comments.map((comment) => ({ ...comment })),
   messages: seedData.messages.map((message) => ({ ...message })),
@@ -134,7 +149,7 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
     return {
       currentUser: currentUserId ? await getPublicUserById(currentUserId) : null,
       users: users.map(omitPassword),
-      groups,
+      groups: groups.map((group) => normalizeGroup(group) as Group),
       posts,
       comments,
       messages,
@@ -161,7 +176,8 @@ export const getUsers = async () => {
 
 export const getGroups = async () => {
   const collections = await requireMongo();
-  return collections ? collections.groups.find().sort({ createdAt: -1 }).toArray() : memory.groups;
+  const groups = collections ? await collections.groups.find().sort({ createdAt: -1 }).toArray() : memory.groups;
+  return groups.map((group) => normalizeGroup(group) as Group);
 };
 
 export const getPosts = async () => {
@@ -204,7 +220,8 @@ export const getUserByEmail = async (email: string) => {
 
 export const getGroupById = async (id: string) => {
   const collections = await requireMongo();
-  return collections ? collections.groups.findOne({ id }) : memory.groups.find((group) => group.id === id) ?? null;
+  const group = collections ? await collections.groups.findOne({ id }) : memory.groups.find((group) => group.id === id) ?? null;
+  return normalizeGroup(group);
 };
 
 export const getPostById = async (id: string) => {
@@ -271,6 +288,7 @@ export const createGroup = async (input: {
     description: input.description.trim(),
     adminId: input.adminId,
     memberIds: [input.adminId],
+    writeBlockedMemberIds: [],
     isLocked: Boolean(input.isLocked),
     requiresApproval: Boolean(input.requiresApproval),
     isDisabled: Boolean(input.isDisabled),
@@ -326,6 +344,49 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
   return group;
 };
 
+export const isGroupMemberWriteBlocked = (group: Group, userId: string) => group.writeBlockedMemberIds.includes(userId);
+
+export const setGroupMemberWriteBlocked = async (groupId: string, userId: string, blocked: boolean) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.groups.updateOne(
+      { id: groupId },
+      blocked ? { $addToSet: { writeBlockedMemberIds: userId } } : { $pull: { writeBlockedMemberIds: userId } }
+    );
+    return getGroupById(groupId);
+  }
+
+  const group = memory.groups.find((item) => item.id === groupId) ?? null;
+  if (!group) return null;
+  group.writeBlockedMemberIds = blocked
+    ? Array.from(new Set([userId, ...group.writeBlockedMemberIds]))
+    : group.writeBlockedMemberIds.filter((id) => id !== userId);
+  return group;
+};
+
+export const removeGroupMember = async (groupId: string, userId: string) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await Promise.all([
+      collections.groups.updateOne(
+        { id: groupId },
+        { $pull: { memberIds: userId, pendingMemberIds: userId, writeBlockedMemberIds: userId } }
+      ),
+      collections.users.updateOne({ id: userId }, { $pull: { joinedGroupIds: groupId } })
+    ]);
+    return getGroupById(groupId);
+  }
+
+  const group = memory.groups.find((item) => item.id === groupId) ?? null;
+  const user = memory.users.find((item) => item.id === userId) ?? null;
+  if (!group || !user) return null;
+  group.memberIds = group.memberIds.filter((id) => id !== userId);
+  group.pendingMemberIds = group.pendingMemberIds.filter((id) => id !== userId);
+  group.writeBlockedMemberIds = group.writeBlockedMemberIds.filter((id) => id !== userId);
+  user.joinedGroupIds = user.joinedGroupIds.filter((id) => id !== groupId);
+  return group;
+};
+
 export const joinGroup = async (groupId: string, userId: string) => {
   const collections = await requireMongo();
   if (collections) {
@@ -339,7 +400,7 @@ export const joinGroup = async (groupId: string, userId: string) => {
     }
 
     await Promise.all([
-      collections.groups.updateOne({ id: groupId }, { $addToSet: { memberIds: userId } }),
+      collections.groups.updateOne({ id: groupId }, { $addToSet: { memberIds: userId }, $pull: { writeBlockedMemberIds: userId } }),
       collections.users.updateOne({ id: userId }, { $addToSet: { joinedGroupIds: groupId } })
     ]);
     return getGroupById(groupId);
@@ -365,7 +426,10 @@ export const approveJoinRequest = async (groupId: string, userId: string) => {
   const collections = await requireMongo();
   if (collections) {
     await Promise.all([
-      collections.groups.updateOne({ id: groupId }, { $pull: { pendingMemberIds: userId }, $addToSet: { memberIds: userId } }),
+      collections.groups.updateOne(
+        { id: groupId },
+        { $pull: { pendingMemberIds: userId, writeBlockedMemberIds: userId }, $addToSet: { memberIds: userId } }
+      ),
       collections.users.updateOne({ id: userId }, { $addToSet: { joinedGroupIds: groupId } }),
       collections.joinRequests.deleteMany({ groupId, userId })
     ]);
@@ -377,6 +441,7 @@ export const approveJoinRequest = async (groupId: string, userId: string) => {
   if (!group || !user) return null;
   group.pendingMemberIds = group.pendingMemberIds.filter((id) => id !== userId);
   if (!group.memberIds.includes(userId)) group.memberIds.unshift(userId);
+  group.writeBlockedMemberIds = group.writeBlockedMemberIds.filter((id) => id !== userId);
   if (!user.joinedGroupIds.includes(groupId)) user.joinedGroupIds.unshift(groupId);
   memory.joinRequests = memory.joinRequests.filter((request) => !(request.groupId === groupId && request.userId === userId));
   return group;
