@@ -1019,7 +1019,7 @@ export default function CommunityApp() {
               </div>
             </ShellCard>
 
-            {false ? (
+            {isSuperUser ? (
             <ShellCard className="p-4 text-right">
                 <div className="mb-3 text-lg font-bold text-text">לוח ניהול</div>
                 <div className="space-y-4">
