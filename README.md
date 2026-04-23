@@ -29,8 +29,9 @@ Open `http://localhost:3000`.
 
 ## Notes
 
-- If `MONGODB_URI` is missing, the app falls back to seeded in-memory data for local development.
-- Set `MONGODB_URI`, `MONGODB_DB`, and `JWT_SECRET` in `.env.local` for Mongo-backed persistence.
+- In development, if `MONGODB_URI` is missing, the app falls back to seeded in-memory data.
+- In production, MongoDB is required. If `MONGODB_URI` is missing or the server cannot reach Atlas, the app will fail to start instead of quietly using memory.
+- Set `MONGODB_URI`, `MONGODB_DB`, and `JWT_SECRET` in `.env.local` for local Mongo-backed persistence.
 
 ## GitHub + Hosting
 
@@ -42,8 +43,14 @@ Open `http://localhost:3000`.
    - `MONGODB_DB`
    - `JWT_SECRET`
    - `NODE_ENV=production`
-5. Use the project’s start command:
+5. Use the project start command:
    - `npm start`
+
+## Railway Checklist
+
+- Add `MONGODB_URI` in the Railway service variables, not only in your local shell.
+- Make sure your Atlas cluster network access allows Railway to connect.
+- Check Railway logs on startup. If Mongo is misconfigured, the app should now fail fast with a clear error instead of silently using memory.
 
 ## Recommended host
 

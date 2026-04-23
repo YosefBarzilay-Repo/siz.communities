@@ -40,6 +40,7 @@ const createMemoryState = (): MemoryState => ({
 
 const memory = globalThis.__siz_memory_store ?? createMemoryState();
 globalThis.__siz_memory_store = memory;
+const isProduction = process.env.NODE_ENV === "production";
 
 let seededMongo = false;
 const getMongoCollections = async () => {
@@ -79,9 +80,21 @@ const getMongoCollections = async () => {
 };
 
 const useMongo = async () => hasMongoConfig ? await getMongoCollections() : null;
+const requireMongo = async () => {
+  const collections = await useMongo();
+  if (collections) {
+    return collections;
+  }
+
+  if (isProduction) {
+    throw new Error("MongoDB persistence is required in production. Check MONGODB_URI and network access.");
+  }
+
+  return null;
+};
 
 export const bootstrap = async (currentUserId?: string | null): Promise<BootstrapPayload> => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
 
   if (collections) {
     const [users, groups, posts, comments, messages] = await Promise.all([
@@ -113,48 +126,48 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
 };
 
 export const getUsers = async () => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.users.find().sort({ createdAt: -1 }).toArray() : memory.users;
 };
 
 export const getGroups = async () => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.groups.find().sort({ createdAt: -1 }).toArray() : memory.groups;
 };
 
 export const getPosts = async () => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.posts.find().sort({ createdAt: -1 }).toArray() : memory.posts;
 };
 
 export const getComments = async () => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.comments.find().sort({ createdAt: -1 }).toArray() : memory.comments;
 };
 
 export const getMessages = async () => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.messages.find().sort({ createdAt: -1 }).toArray() : memory.messages;
 };
 
 export const getUserById = async (id: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.users.findOne({ id }) : memory.users.find((user) => user.id === id) ?? null;
 };
 
 export const getUserByEmail = async (email: string) => {
   const normalized = email.toLowerCase();
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.users.findOne({ email: normalized }) : memory.users.find((user) => user.email.toLowerCase() === normalized) ?? null;
 };
 
 export const getGroupById = async (id: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.groups.findOne({ id }) : memory.groups.find((group) => group.id === id) ?? null;
 };
 
 export const getPostById = async (id: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   return collections ? collections.posts.findOne({ id }) : memory.posts.find((post) => post.id === id) ?? null;
 };
 
@@ -184,7 +197,7 @@ export const createUser = async (input: {
     createdAt: new Date().toISOString()
   };
 
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.users.insertOne(user);
   } else {
@@ -216,7 +229,7 @@ export const createGroup = async (input: {
     createdAt: new Date().toISOString()
   };
 
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await Promise.all([
       collections.groups.insertOne(group),
@@ -233,7 +246,7 @@ export const createGroup = async (input: {
 };
 
 export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, "name" | "category" | "description">>) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.groups.updateOne(
       { id: groupId },
@@ -259,7 +272,7 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
 };
 
 export const joinGroup = async (groupId: string, userId: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await Promise.all([
       collections.groups.updateOne({ id: groupId }, { $addToSet: { memberIds: userId } }),
@@ -277,7 +290,7 @@ export const joinGroup = async (groupId: string, userId: string) => {
 };
 
 export const leaveGroup = async (groupId: string, userId: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await Promise.all([
       collections.groups.updateOne({ id: groupId }, { $pull: { memberIds: userId } }),
@@ -295,7 +308,7 @@ export const leaveGroup = async (groupId: string, userId: string) => {
 };
 
 export const deleteGroup = async (groupId: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     const postIds = (await collections.posts.find({ groupId }).project({ id: 1 }).toArray()).map((post) => post.id);
     await Promise.all([
@@ -329,7 +342,7 @@ export const createPost = async (input: {
     createdAt: new Date().toISOString()
   };
 
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.posts.insertOne(post);
   } else {
@@ -339,7 +352,7 @@ export const createPost = async (input: {
 };
 
 export const deletePost = async (postId: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await Promise.all([collections.posts.deleteOne({ id: postId }), collections.comments.deleteMany({ postId })]);
     return;
@@ -362,7 +375,7 @@ export const addComment = async (input: {
     createdAt: new Date().toISOString()
   };
 
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.comments.insertOne(comment);
   } else {
@@ -372,7 +385,7 @@ export const addComment = async (input: {
 };
 
 export const deleteComment = async (commentId: string) => {
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.comments.deleteOne({ id: commentId });
     return;
@@ -394,7 +407,7 @@ export const sendMessage = async (input: {
     createdAt: new Date().toISOString()
   };
 
-  const collections = await useMongo();
+  const collections = await requireMongo();
   if (collections) {
     await collections.messages.insertOne(message);
   } else {

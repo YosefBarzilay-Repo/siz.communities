@@ -2,6 +2,7 @@ import express from "express";
 import next from "next";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
+import { getDbOrNull } from "./lib/mongo";
 import { setSocketServer } from "./lib/realtime";
 
 async function main() {
@@ -9,6 +10,10 @@ async function main() {
   const app = next({ dev, dir: process.cwd() });
   const handle = app.getRequestHandler();
   const port = Number(process.env.PORT ?? 3000);
+
+  if (process.env.NODE_ENV === "production") {
+    await getDbOrNull();
+  }
 
   await app.prepare();
 

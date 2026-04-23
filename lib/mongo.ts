@@ -9,6 +9,7 @@ declare global {
 
 const uri = process.env.MONGODB_URI;
 const dbName = process.env.MONGODB_DB ?? "siz_communities";
+const isProduction = process.env.NODE_ENV === "production";
 
 const clientOptions = {};
 
@@ -39,12 +40,18 @@ export const getDb = async (): Promise<Db> => {
 
 export const getDbOrNull = async (): Promise<Db | null> => {
   if (!uri) {
+    if (isProduction) {
+      throw new Error("MONGODB_URI is required in production");
+    }
     return null;
   }
 
   try {
     return await getDb();
   } catch (error) {
+    if (isProduction) {
+      throw error;
+    }
     console.error("Mongo connection failed; using in-memory fallback for this request.", error);
     return null;
   }
