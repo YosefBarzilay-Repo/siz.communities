@@ -9,6 +9,7 @@ export type User = {
   passwordHash: string;
   joinedGroupIds: string[];
   isLocked: boolean;
+  isDisabled: boolean;
   bio: string;
   createdAt: string;
 };
@@ -21,6 +22,7 @@ export type Group = {
   adminId: string;
   memberIds: string[];
   isLocked: boolean;
+  isDisabled: boolean;
   requiresApproval: boolean;
   pendingMemberIds: string[];
   createdAt: string;
@@ -34,6 +36,7 @@ export type Post = {
   imageUrl?: string;
   type: ListingType;
   isLocked: boolean;
+  isDisabled: boolean;
   lockedBy?: string;
   lockedAt?: string;
   createdAt: string;

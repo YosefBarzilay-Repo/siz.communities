@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { deletePost, getGroupById, getPostById, lockPost } from "@/lib/store";
+import { deletePost, disablePost, getGroupById, getPostById, lockPost } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -25,13 +25,15 @@ export async function PATCH(request: NextRequest, context: Params) {
 
   const group = await getGroupById(post.groupId);
   const body = await request.json().catch(() => ({}));
-  const locked = Boolean(body.locked);
   const canEdit = post.userId === user.id || group?.adminId === user.id;
   if (!canEdit) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
-  const updated = await lockPost(postId, user.id, locked);
+  const isLocked = body.locked ?? body.isLocked;
+  const updated = await (typeof isLocked === "boolean"
+    ? lockPost(postId, user.id, isLocked)
+    : disablePost(postId, Boolean(body.isDisabled)));
   broadcastUpdate("store:update", { kind: "post-updated", postId });
   return NextResponse.json({ post: updated });
 }

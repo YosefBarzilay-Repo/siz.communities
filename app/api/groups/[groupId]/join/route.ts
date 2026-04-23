@@ -18,8 +18,12 @@ export async function POST(request: NextRequest, context: Params) {
   }
 
   const { groupId } = await context.params;
-  if (!(await getGroupById(groupId))) {
+  const group = await getGroupById(groupId);
+  if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
+  }
+  if (group.isDisabled) {
+    return NextResponse.json({ error: "Group is disabled" }, { status: 423 });
   }
 
   await joinGroup(groupId, user.id);

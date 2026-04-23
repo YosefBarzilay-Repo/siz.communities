@@ -32,7 +32,8 @@ export async function PATCH(request: NextRequest, context: Params) {
     category: body.category,
     description: body.description,
     isLocked: body.isLocked,
-    requiresApproval: body.requiresApproval
+    requiresApproval: body.requiresApproval,
+    isDisabled: body.isDisabled
   });
 
   broadcastUpdate("store:update", { kind: "group-updated", groupId });

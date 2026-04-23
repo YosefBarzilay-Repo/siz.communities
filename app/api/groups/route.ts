@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
     description,
     adminId: user.id,
     isLocked: Boolean(body.isLocked),
-    requiresApproval: Boolean(body.requiresApproval)
+    requiresApproval: Boolean(body.requiresApproval),
+    isDisabled: Boolean(body.isDisabled)
   });
 
   broadcastUpdate("store:update", { kind: "group-created", groupId: group.id });

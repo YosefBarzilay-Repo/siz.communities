@@ -12,6 +12,7 @@ const createUser = (username: string, email: string, password: string, bio: stri
   passwordHash: bcrypt.hashSync(password, 10),
   joinedGroupIds: [],
   isLocked: false,
+  isDisabled: false,
   bio,
   createdAt: daysAgo(30)
 });
@@ -32,6 +33,7 @@ const groups: Group[] = [
     adminId: users[0].id,
     memberIds: [users[0].id, users[1].id, users[2].id],
     isLocked: false,
+    isDisabled: false,
     requiresApproval: false,
     pendingMemberIds: [],
     createdAt: daysAgo(20)
@@ -44,6 +46,7 @@ const groups: Group[] = [
     adminId: users[2].id,
     memberIds: [users[1].id, users[2].id, users[3].id],
     isLocked: false,
+    isDisabled: false,
     requiresApproval: false,
     pendingMemberIds: [],
     createdAt: daysAgo(14)
@@ -56,6 +59,7 @@ const groups: Group[] = [
     adminId: users[1].id,
     memberIds: [users[0].id, users[1].id, users[3].id],
     isLocked: true,
+    isDisabled: false,
     requiresApproval: true,
     pendingMemberIds: [],
     createdAt: daysAgo(8)
@@ -76,6 +80,7 @@ const posts: Post[] = [
     imageUrl: "",
     type: "sale",
     isLocked: false,
+    isDisabled: false,
     createdAt: daysAgo(1)
   },
   {
@@ -86,6 +91,7 @@ const posts: Post[] = [
     imageUrl: "",
     type: "giveaway",
     isLocked: false,
+    isDisabled: false,
     createdAt: daysAgo(2)
   },
   {
@@ -96,6 +102,7 @@ const posts: Post[] = [
     imageUrl: "",
     type: "sale",
     isLocked: false,
+    isDisabled: false,
     createdAt: daysAgo(1)
   }
 ];

@@ -29,8 +29,12 @@ export async function POST(request: NextRequest) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  if (group.isLocked) {
-    return NextResponse.json({ error: "Group is locked" }, { status: 423 });
+  const isMember = group.adminId === user.id || group.memberIds.includes(user.id);
+  if (!isMember) {
+    return NextResponse.json({ error: "Join approval required" }, { status: 403 });
+  }
+  if (group.isDisabled || group.isLocked) {
+    return NextResponse.json({ error: "Group is disabled" }, { status: 423 });
   }
 
   const post = await createPost({

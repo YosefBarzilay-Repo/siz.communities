@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
-import { getUserById } from "./store";
+import { getUserById, getWritableUserById } from "./store";
 
 const TOKEN_NAME = "siz_token";
 const AUTH_HEADER = "authorization";
@@ -57,7 +57,6 @@ export const getUserFromRequest = async (request: NextRequest) => {
 export const getWritableUserFromRequest = async (request: NextRequest) => {
   const user = await getUserFromRequest(request);
   if (!user) return null;
-  const dbUser = await getUserById(user.id);
-  if (dbUser?.isLocked) return null;
-  return user;
+  const writable = await getWritableUserById(user.id);
+  return writable ? user : null;
 };

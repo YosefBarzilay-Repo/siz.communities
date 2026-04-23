@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { deleteUser, getGroups, getUserById, lockUser } from "@/lib/store";
+import { deleteUser, disableUser, getGroups, getUserById, lockUser } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -33,8 +33,10 @@ export async function PATCH(request: NextRequest, context: Params) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const locked = Boolean(body.locked);
-  const updated = await lockUser(userId, locked);
+  const isLocked = body.locked ?? body.isLocked;
+  const updated = await (typeof isLocked === "boolean"
+    ? lockUser(userId, isLocked)
+    : disableUser(userId, Boolean(body.isDisabled)));
   broadcastUpdate("store:update", { kind: "user-updated", userId });
   return NextResponse.json({ user: updated });
 }

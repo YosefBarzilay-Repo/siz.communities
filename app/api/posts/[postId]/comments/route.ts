@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { addComment, getComments, getPostById } from "@/lib/store";
+import { addComment, getComments, getGroupById, getPostById } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -30,8 +30,16 @@ export async function POST(request: NextRequest, context: Params) {
   if (!post) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
-  if (post.isLocked) {
-    return NextResponse.json({ error: "Thread is locked" }, { status: 423 });
+  const group = await getGroupById(post.groupId);
+  if (!group) {
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
+  }
+  const isMember = group.adminId === user.id || group.memberIds.includes(user.id);
+  if (!isMember) {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  }
+  if (group.isDisabled || group.isLocked || post.isLocked || post.isDisabled) {
+    return NextResponse.json({ error: "Thread is disabled" }, { status: 423 });
   }
 
   const body = await request.json();

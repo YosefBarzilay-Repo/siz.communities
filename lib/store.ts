@@ -171,6 +171,11 @@ export const getUserById = async (id: string) => {
   return collections ? collections.users.findOne({ id }) : memory.users.find((user) => user.id === id) ?? null;
 };
 
+export const getWritableUserById = async (id: string) => {
+  const user = await getUserById(id);
+  return user && !user.isLocked && !user.isDisabled ? user : null;
+};
+
 export const getUserByEmail = async (email: string) => {
   const normalized = email.toLowerCase();
   const collections = await requireMongo();
@@ -208,6 +213,7 @@ export const createUser = async (input: {
     passwordHash: await bcrypt.hash(input.password, 10),
     joinedGroupIds: [],
     isLocked: false,
+    isDisabled: false,
     bio: input.bio?.trim() || "חבר קהילה חדש ב-SIZ",
     createdAt: new Date().toISOString()
   };
@@ -235,6 +241,7 @@ export const createGroup = async (input: {
   adminId: string;
   isLocked?: boolean;
   requiresApproval?: boolean;
+  isDisabled?: boolean;
 }) => {
   const group: Group = {
     id: randomUUID(),
@@ -245,6 +252,7 @@ export const createGroup = async (input: {
     memberIds: [input.adminId],
     isLocked: Boolean(input.isLocked),
     requiresApproval: Boolean(input.requiresApproval),
+    isDisabled: Boolean(input.isDisabled),
     pendingMemberIds: [],
     createdAt: new Date().toISOString()
   };
@@ -265,7 +273,7 @@ export const createGroup = async (input: {
   return group;
 };
 
-export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, "name" | "category" | "description" | "isLocked" | "requiresApproval">>) => {
+export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, "name" | "category" | "description" | "isLocked" | "requiresApproval" | "isDisabled">>) => {
   const collections = await requireMongo();
   if (collections) {
     await collections.groups.updateOne(
@@ -276,7 +284,8 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
           ...(updates.category ? { category: updates.category.trim() } : {}),
           ...(updates.description ? { description: updates.description.trim() } : {}),
           ...(typeof updates.isLocked === "boolean" ? { isLocked: updates.isLocked } : {}),
-          ...(typeof updates.requiresApproval === "boolean" ? { requiresApproval: updates.requiresApproval } : {})
+          ...(typeof updates.requiresApproval === "boolean" ? { requiresApproval: updates.requiresApproval } : {}),
+          ...(typeof updates.isDisabled === "boolean" ? { isDisabled: updates.isDisabled } : {})
         }
       }
     );
@@ -290,7 +299,8 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
     ...(updates.category ? { category: updates.category.trim() } : {}),
     ...(updates.description ? { description: updates.description.trim() } : {}),
     ...(typeof updates.isLocked === "boolean" ? { isLocked: updates.isLocked } : {}),
-    ...(typeof updates.requiresApproval === "boolean" ? { requiresApproval: updates.requiresApproval } : {})
+    ...(typeof updates.requiresApproval === "boolean" ? { requiresApproval: updates.requiresApproval } : {}),
+    ...(typeof updates.isDisabled === "boolean" ? { isDisabled: updates.isDisabled } : {})
   });
   return group;
 };
@@ -300,6 +310,7 @@ export const joinGroup = async (groupId: string, userId: string) => {
   if (collections) {
     const group = await collections.groups.findOne({ id: groupId });
     if (!group) return null;
+    if (group.isDisabled) return null;
     if (group.requiresApproval) {
       await collections.groups.updateOne({ id: groupId }, { $addToSet: { pendingMemberIds: userId } });
       await collections.joinRequests.insertOne({ id: randomUUID(), groupId, userId, createdAt: new Date().toISOString() });
@@ -316,6 +327,7 @@ export const joinGroup = async (groupId: string, userId: string) => {
   const group = memory.groups.find((item) => item.id === groupId) ?? null;
   const user = memory.users.find((item) => item.id === userId) ?? null;
   if (!group || !user) return null;
+  if (group.isDisabled) return null;
   if (group.requiresApproval) {
     if (!group.pendingMemberIds.includes(userId)) group.pendingMemberIds.unshift(userId);
     if (!memory.joinRequests.some((request) => request.groupId === groupId && request.userId === userId)) {
@@ -432,6 +444,7 @@ export const createPost = async (input: {
     imageUrl: input.imageUrl?.trim() || "",
     type: input.type,
     isLocked: false,
+    isDisabled: false,
     createdAt: new Date().toISOString()
   };
 
@@ -465,6 +478,19 @@ export const lockUser = async (userId: string, isLocked: boolean) => {
   const user = memory.users.find((item) => item.id === userId) ?? null;
   if (!user) return null;
   user.isLocked = isLocked;
+  return user;
+};
+
+export const disableUser = async (userId: string, isDisabled: boolean) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.users.updateOne({ id: userId }, { $set: { isDisabled } });
+    return getUserById(userId);
+  }
+
+  const user = memory.users.find((item) => item.id === userId) ?? null;
+  if (!user) return null;
+  user.isDisabled = isDisabled;
   return user;
 };
 
@@ -549,6 +575,19 @@ export const lockPost = async (postId: string, lockedBy: string, isLocked: boole
   Object.assign(post, isLocked
     ? { isLocked: true, lockedBy, lockedAt: new Date().toISOString() }
     : { isLocked: false, lockedBy: "", lockedAt: "" });
+  return post;
+};
+
+export const disablePost = async (postId: string, isDisabled: boolean) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.posts.updateOne({ id: postId }, { $set: { isDisabled } });
+    return getPostById(postId);
+  }
+
+  const post = memory.posts.find((item) => item.id === postId) ?? null;
+  if (!post) return null;
+  post.isDisabled = isDisabled;
   return post;
 };
 
