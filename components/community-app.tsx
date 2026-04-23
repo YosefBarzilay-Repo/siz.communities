@@ -58,7 +58,6 @@ const errorMessageMap: Record<string, string> = {
   "Invalid input": "קלט לא תקין",
   "Invalid credentials": "פרטי התחברות לא תקינים",
   "Email already exists": "האימייל כבר קיים",
-  "Email verification required": "נדרש לאמת את כתובת האימייל לפני שליחת הודעות",
   "Group name is required": "נדרש שם לקבוצה",
   "Consent required": "נדרשת הסכמה לתנאים ולמדיניות",
   "Missing recipient or text": "חסר נמען או טקסט",
@@ -158,8 +157,6 @@ export default function CommunityApp() {
   });
   const [newGroup, setNewGroup] = useState({ name: "", description: "", requiresApproval: false });
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
-  const [emailVerificationDone, setEmailVerificationDone] = useState(false);
   const selectedGroupIdRef = useRef("");
 
   const currentUser = data.currentUser;
@@ -248,7 +245,6 @@ export default function CommunityApp() {
     selectedPartner &&
       (currentUserDetail?.blockedUserIds?.includes(selectedPartner.id) || selectedPartner.blockedUserIds?.includes(currentUser?.id ?? ""))
   );
-  const requiresEmailVerification = Boolean(currentUserDetail && !currentUserDetail.emailVerifiedAt);
   const currentConversation = selectedPartner
     ? data.messages
         .filter((message) =>
@@ -390,21 +386,6 @@ export default function CommunityApp() {
     }
     setRegisterConsent({ acceptTerms: false, acceptPrivacy: false, marketingOptIn: false });
     await refresh();
-  };
-
-  const handleVerifyEmail = async () => {
-    if (emailVerificationLoading) return;
-    setEmailVerificationLoading(true);
-    try {
-      const payload = await api<{ user: PublicUser; token: string }>("/api/auth/verify-email", {
-        method: "POST"
-      });
-      writeStoredToken(payload.token);
-      setEmailVerificationDone(true);
-      await refresh();
-    } finally {
-      setEmailVerificationLoading(false);
-    }
   };
 
   const handleLogout = async () => {
@@ -915,30 +896,6 @@ export default function CommunityApp() {
 
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
-            {requiresEmailVerification ? (
-              <ShellCard className="border border-amber-200 bg-amber-50 p-4 text-right">
-                <div className="text-sm font-bold text-text">נדרש לאמת את האימייל</div>
-                <div className="mt-1 text-sm leading-6 text-text-muted">
-                  שליחת הודעות פרטיות חסומה עד לאימות הכתובת. זה מפחית התחזות ומגן על משתמשים אחרים.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleVerifyEmail().catch((err: Error) => setError(err.message))}
-                  className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={emailVerificationLoading}
-                >
-                  {emailVerificationLoading ? "מאמת..." : emailVerificationDone ? "אומת" : "אימות אימייל"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleVerifyEmail().catch((err: Error) => setError(err.message))}
-                  className="mt-2 block text-xs font-semibold text-primary underline"
-                  disabled={emailVerificationLoading}
-                >
-                  לחצו כאן אם הכפתור מעל לא עבד
-                </button>
-              </ShellCard>
-            ) : null}
             <div className="flex items-center justify-between">
                 <div className="text-lg font-bold text-text">הקבוצות שלי</div>
               <button

@@ -236,7 +236,7 @@ export const getUserById = async (id: string) => {
 
 export const getWritableUserById = async (id: string) => {
   const user = await getUserById(id);
-  return user && (isSuperUserUser(user) || (!user.isLocked && !user.isDisabled && Boolean(user.emailVerifiedAt))) ? user : null;
+  return user && (isSuperUserUser(user) || (!user.isLocked && !user.isDisabled)) ? user : null;
 };
 
 export const getUserByEmail = async (email: string) => {
@@ -737,9 +737,6 @@ export const sendMessage = async (input: {
 }): Promise<Message | null> => {
   const [sender, receiver] = await Promise.all([getUserById(input.senderId), getUserById(input.receiverId)]);
   if (!sender || !receiver) return null;
-  if (!sender.emailVerifiedAt) {
-    throw new Error("Email verification required");
-  }
   if (sender.blockedUserIds.includes(receiver.id) || receiver.blockedUserIds.includes(sender.id)) {
     throw new Error("Not allowed");
   }
