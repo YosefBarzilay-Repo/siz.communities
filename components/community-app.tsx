@@ -158,6 +158,8 @@ export default function CommunityApp() {
   });
   const [newGroup, setNewGroup] = useState({ name: "", description: "", requiresApproval: false });
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
+  const [emailVerificationDone, setEmailVerificationDone] = useState(false);
   const selectedGroupIdRef = useRef("");
 
   const currentUser = data.currentUser;
@@ -391,11 +393,18 @@ export default function CommunityApp() {
   };
 
   const handleVerifyEmail = async () => {
-    const payload = await api<{ user: PublicUser; token: string }>("/api/auth/verify-email", {
-      method: "POST"
-    });
-    writeStoredToken(payload.token);
-    await refresh();
+    if (emailVerificationLoading) return;
+    setEmailVerificationLoading(true);
+    try {
+      const payload = await api<{ user: PublicUser; token: string }>("/api/auth/verify-email", {
+        method: "POST"
+      });
+      writeStoredToken(payload.token);
+      setEmailVerificationDone(true);
+      await refresh();
+    } finally {
+      setEmailVerificationLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -915,9 +924,18 @@ export default function CommunityApp() {
                 <button
                   type="button"
                   onClick={() => handleVerifyEmail().catch((err: Error) => setError(err.message))}
-                  className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
+                  className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={emailVerificationLoading}
                 >
-                  אימות אימייל
+                  {emailVerificationLoading ? "מאמת..." : emailVerificationDone ? "אומת" : "אימות אימייל"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleVerifyEmail().catch((err: Error) => setError(err.message))}
+                  className="mt-2 block text-xs font-semibold text-primary underline"
+                  disabled={emailVerificationLoading}
+                >
+                  לחצו כאן אם הכפתור מעל לא עבד
                 </button>
               </ShellCard>
             ) : null}
