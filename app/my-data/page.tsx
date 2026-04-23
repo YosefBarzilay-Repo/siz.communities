@@ -4,13 +4,20 @@ import { useEffect, useState } from "react";
 import { CompliancePage } from "@/components/compliance-page";
 
 type MePayload = {
-  currentUser: { id: string; username: string; email: string; isSuperUser: boolean } | null;
-  users?: unknown[];
-  groups?: unknown[];
-  posts?: unknown[];
-  comments?: unknown[];
-  messages?: unknown[];
-  joinRequests?: unknown[];
+  currentUser: {
+    id: string;
+    username: string;
+    email: string;
+    bio: string;
+    joinedGroupIds: string[];
+    blockedUserIds: string[];
+    marketingOptIn: boolean;
+    acceptedTermsAt: string | null;
+    acceptedPrivacyAt: string | null;
+    emailVerifiedAt: string | null;
+    createdAt: string;
+  } | null;
+  myData?: Record<string, unknown>;
 };
 
 export default function MyDataPage() {
@@ -18,7 +25,7 @@ export default function MyDataPage() {
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
+    fetch("/api/my-data", { credentials: "include" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Not authenticated");
         return response.json();
@@ -29,13 +36,13 @@ export default function MyDataPage() {
 
   const downloadData = async () => {
     setStatus("מכין קובץ...");
-    const response = await fetch("/api/me", { credentials: "include" });
+    const response = await fetch("/api/my-data", { credentials: "include" });
     if (!response.ok) {
       setStatus("נדרש להתחבר כדי להוריד את הנתונים.");
       return;
     }
     const payload = (await response.json()) as MePayload;
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([JSON.stringify(payload.myData ?? payload.currentUser, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

@@ -15,6 +15,7 @@ export type User = {
   marketingOptIn: boolean;
   acceptedTermsAt: string | null;
   acceptedPrivacyAt: string | null;
+  emailVerifiedAt: string | null;
   bio: string;
   createdAt: string;
 };

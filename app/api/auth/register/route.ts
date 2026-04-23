@@ -31,14 +31,16 @@ export async function POST(request: NextRequest) {
       bio: String(body.bio ?? ""),
       marketingOptIn,
       acceptedTermsAt: now,
-      acceptedPrivacyAt: now
+      acceptedPrivacyAt: now,
+      emailVerifiedAt: process.env.AUTO_VERIFY_EMAILS === "1" ? now : null
     });
     const token = await signAuthToken(user.id);
     broadcastUpdate("store:update", { kind: "user-created", userId: user.id });
 
     const response = NextResponse.json({
       user: await getPublicUserById(user.id),
-      token
+      token,
+      emailVerificationRequired: !user.emailVerifiedAt
     });
 
     response.cookies.set(tokenName, token, {

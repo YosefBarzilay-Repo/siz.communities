@@ -58,6 +58,7 @@ const errorMessageMap: Record<string, string> = {
   "Invalid input": "קלט לא תקין",
   "Invalid credentials": "פרטי התחברות לא תקינים",
   "Email already exists": "האימייל כבר קיים",
+  "Email verification required": "נדרש לאמת את כתובת האימייל לפני שליחת הודעות",
   "Group name is required": "נדרש שם לקבוצה",
   "Consent required": "נדרשת הסכמה לתנאים ולמדיניות",
   "Missing recipient or text": "חסר נמען או טקסט",
@@ -245,6 +246,7 @@ export default function CommunityApp() {
     selectedPartner &&
       (currentUserDetail?.blockedUserIds?.includes(selectedPartner.id) || selectedPartner.blockedUserIds?.includes(currentUser?.id ?? ""))
   );
+  const requiresEmailVerification = Boolean(currentUserDetail && !currentUserDetail.emailVerifiedAt);
   const currentConversation = selectedPartner
     ? data.messages
         .filter((message) =>
@@ -388,6 +390,14 @@ export default function CommunityApp() {
     await refresh();
   };
 
+  const handleVerifyEmail = async () => {
+    const payload = await api<{ user: PublicUser; token: string }>("/api/auth/verify-email", {
+      method: "POST"
+    });
+    writeStoredToken(payload.token);
+    await refresh();
+  };
+
   const handleLogout = async () => {
     await api("/api/auth/logout", { method: "POST" });
     clearStoredToken();
@@ -426,13 +436,18 @@ export default function CommunityApp() {
 
   const handleCreateGroup = async (event: FormEvent) => {
     event.preventDefault();
-    await api("/api/groups", {
+    const payload = await api<{ group: Group }>("/api/groups", {
       method: "POST",
       body: JSON.stringify(newGroup)
     });
     setNewGroup({ name: "", description: "", requiresApproval: false });
     await refresh();
-    setView("groups");
+    if (payload.group?.id) {
+      setSelectedGroupId(payload.group.id);
+      setView("group");
+    } else {
+      setView("groups");
+    }
   };
 
   const handleApproveJoin = async (groupId: string, userId: string) => {
@@ -495,11 +510,19 @@ export default function CommunityApp() {
 
   const handleDeleteGroup = async (groupId: string) => {
     await api(`/api/groups/${groupId}`, { method: "DELETE" });
-    if (selectedGroupId === groupId) {
-      setSelectedGroupId("");
-    }
     await refresh();
-    setView("groups");
+    if (selectedGroupId === groupId) {
+      const fallbackGroup = joinedGroups.find((group) => group.id !== groupId) ?? availableGroups.find((group) => group.id !== groupId) ?? null;
+      if (fallbackGroup) {
+        setSelectedGroupId(fallbackGroup.id);
+        setView("group");
+      } else {
+        setSelectedGroupId("");
+        setView("groups");
+      }
+    } else {
+      setView("groups");
+    }
   };
 
   const handleTogglePostLock = async (postId: string, locked: boolean) => {
@@ -883,6 +906,21 @@ export default function CommunityApp() {
 
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
+            {requiresEmailVerification ? (
+              <ShellCard className="border border-amber-200 bg-amber-50 p-4 text-right">
+                <div className="text-sm font-bold text-text">נדרש לאמת את האימייל</div>
+                <div className="mt-1 text-sm leading-6 text-text-muted">
+                  שליחת הודעות פרטיות חסומה עד לאימות הכתובת. זה מפחית התחזות ומגן על משתמשים אחרים.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleVerifyEmail().catch((err: Error) => setError(err.message))}
+                  className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
+                >
+                  אימות אימייל
+                </button>
+              </ShellCard>
+            ) : null}
             <div className="flex items-center justify-between">
                 <div className="text-lg font-bold text-text">הקבוצות שלי</div>
               <button
@@ -1156,6 +1194,18 @@ export default function CommunityApp() {
                     <div className="text-sm text-text-muted">בחרו אדם כדי להתחיל שיחה</div>
                   )}
                 </div>
+                {selectedPartner && selectedPartner.id !== currentUser?.id ? (
+                  <div className="mb-3 flex items-center justify-between rounded-2xl bg-white px-3 py-2">
+                    <div className="text-xs text-text-muted">נתקלתם בהתנהגות פוגענית או חשודה?</div>
+                    <button
+                      type="button"
+                      onClick={handleReportSelectedPartner}
+                      className="rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-danger"
+                    >
+                      דווחו
+                    </button>
+                  </div>
+                ) : null}
                 <form onSubmit={handleSendMessage} className="space-y-2">
                   <textarea
                     value={messageText}

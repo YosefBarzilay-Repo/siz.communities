@@ -36,6 +36,7 @@ const normalizeUser = (user: User | null): User | null =>
         marketingOptIn: Boolean(user.marketingOptIn),
         acceptedTermsAt: user.acceptedTermsAt ?? null,
         acceptedPrivacyAt: user.acceptedPrivacyAt ?? null,
+        emailVerifiedAt: user.emailVerifiedAt ?? null,
         isSuperUser: isSuperUserUser(user)
       }
     : null;
@@ -235,7 +236,7 @@ export const getUserById = async (id: string) => {
 
 export const getWritableUserById = async (id: string) => {
   const user = await getUserById(id);
-  return user && (isSuperUserUser(user) || (!user.isLocked && !user.isDisabled)) ? user : null;
+  return user && (isSuperUserUser(user) || (!user.isLocked && !user.isDisabled && Boolean(user.emailVerifiedAt))) ? user : null;
 };
 
 export const getUserByEmail = async (email: string) => {
@@ -269,6 +270,7 @@ export const createUser = async (input: {
   marketingOptIn?: boolean;
   acceptedTermsAt?: string | null;
   acceptedPrivacyAt?: string | null;
+  emailVerifiedAt?: string | null;
 }) => {
   const existing = await getUserByEmail(input.email);
   if (existing) throw new Error("EMAIL_TAKEN");
@@ -286,6 +288,7 @@ export const createUser = async (input: {
     marketingOptIn: Boolean(input.marketingOptIn),
     acceptedTermsAt: input.acceptedTermsAt ?? null,
     acceptedPrivacyAt: input.acceptedPrivacyAt ?? null,
+    emailVerifiedAt: input.emailVerifiedAt ?? null,
     bio: input.bio?.trim() || "Community member on SIZ",
     createdAt: new Date().toISOString()
   };
@@ -304,6 +307,20 @@ export const verifyUser = async (email: string, password: string) => {
   if (!user) return null;
   const valid = await bcrypt.compare(password, user.passwordHash);
   return valid ? user : null;
+};
+
+export const verifyUserEmail = async (userId: string) => {
+  const verifiedAt = new Date().toISOString();
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.users.updateOne({ id: userId }, { $set: { emailVerifiedAt: verifiedAt } });
+    return getUserById(userId);
+  }
+
+  const user = memory.users.find((item) => item.id === userId) ?? null;
+  if (!user) return null;
+  user.emailVerifiedAt = verifiedAt;
+  return user;
 };
 
 export const createGroup = async (input: {
@@ -720,6 +737,9 @@ export const sendMessage = async (input: {
 }): Promise<Message | null> => {
   const [sender, receiver] = await Promise.all([getUserById(input.senderId), getUserById(input.receiverId)]);
   if (!sender || !receiver) return null;
+  if (!sender.emailVerifiedAt) {
+    throw new Error("Email verification required");
+  }
   if (sender.blockedUserIds.includes(receiver.id) || receiver.blockedUserIds.includes(sender.id)) {
     throw new Error("Not allowed");
   }

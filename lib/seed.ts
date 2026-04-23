@@ -18,6 +18,7 @@ const createUser = (username: string, email: string, password: string, bio: stri
   marketingOptIn: false,
   acceptedTermsAt: daysAgo(30),
   acceptedPrivacyAt: daysAgo(30),
+  emailVerifiedAt: daysAgo(30),
   bio,
   createdAt: daysAgo(30)
 });
