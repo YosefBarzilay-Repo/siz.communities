@@ -1,9 +1,8 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
-import type { BootstrapPayload, Comment, Group, Message, Post, User } from "./types";
+import type { BootstrapPayload, Comment, Group, GroupJoinRequest, Message, Post, User } from "./types";
 
 const now = new Date();
-
 const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 
 const createUser = (username: string, email: string, password: string, bio: string): User => ({
@@ -31,6 +30,8 @@ const groups: Group[] = [
     description: "לוח הקהילה של הבניינים, המעברים והיד השנייה בשכונה.",
     adminId: users[0].id,
     memberIds: [users[0].id, users[1].id, users[2].id],
+    isLocked: false,
+    pendingMemberIds: [],
     createdAt: daysAgo(20)
   },
   {
@@ -40,6 +41,8 @@ const groups: Group[] = [
     description: "ריהוט, ספרים, מטבחונים וכל מה שזז בין חדרי מעונות.",
     adminId: users[2].id,
     memberIds: [users[1].id, users[2].id, users[3].id],
+    isLocked: false,
+    pendingMemberIds: [],
     createdAt: daysAgo(14)
   },
   {
@@ -49,6 +52,8 @@ const groups: Group[] = [
     description: "פריטים שנשארו אחרי חתונות, בריתות וכנסים.",
     adminId: users[1].id,
     memberIds: [users[0].id, users[1].id, users[3].id],
+    isLocked: true,
+    pendingMemberIds: [],
     createdAt: daysAgo(8)
   }
 ];
@@ -85,15 +90,6 @@ const posts: Post[] = [
     imageUrl: "",
     type: "sale",
     createdAt: daysAgo(1)
-  },
-  {
-    id: randomUUID(),
-    groupId: groups[2].id,
-    userId: users[3].id,
-    text: "סט כוסות מזכוכית למסירה. מתאים לבית חדש או למטבחון משותף.",
-    imageUrl: "",
-    type: "giveaway",
-    createdAt: daysAgo(3)
   }
 ];
 
@@ -102,48 +98,21 @@ const comments: Comment[] = [
     id: randomUUID(),
     postId: posts[0].id,
     userId: users[2].id,
-    text: "יש עדיין את הכיסא המתאים? אני יכול להגיע היום בערב.",
+    text: "יש עדיין את השולחן? אפשר להגיע בערב.",
     createdAt: daysAgo(1)
   },
   {
     id: randomUUID(),
     postId: posts[0].id,
     userId: users[1].id,
-    text: "כן, שמור עד מחר בבוקר אם תרצה.",
-    createdAt: daysAgo(1)
-  },
-  {
-    id: randomUUID(),
-    postId: posts[2].id,
-    userId: users[3].id,
-    text: "אפשר תמונה של המדף העליון?",
+    text: "כן, שמור עד מחר בבוקר.",
     createdAt: daysAgo(1)
   }
 ];
 
-const messages: Message[] = [
-  {
-    id: randomUUID(),
-    senderId: users[2].id,
-    receiverId: users[0].id,
-    text: "האם השולחן עדיין פנוי? אני מעוניין לאסוף הערב.",
-    createdAt: daysAgo(1)
-  },
-  {
-    id: randomUUID(),
-    senderId: users[0].id,
-    receiverId: users[2].id,
-    text: "כן, שמרתי לך אותו עד 20:00.",
-    createdAt: daysAgo(1)
-  },
-  {
-    id: randomUUID(),
-    senderId: users[1].id,
-    receiverId: users[3].id,
-    text: "יש לי גם מתקן כביסה אם צריך, רוצה שאוסיף לשרשור?",
-    createdAt: daysAgo(2)
-  }
-];
+const messages: Message[] = [];
+
+const joinRequests: GroupJoinRequest[] = [];
 
 export const seedData: BootstrapPayload = {
   currentUser: null,
@@ -151,7 +120,8 @@ export const seedData: BootstrapPayload = {
   groups,
   posts,
   comments,
-  messages
+  messages,
+  joinRequests
 };
 
 export const seedUsers = users;

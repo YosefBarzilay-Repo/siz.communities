@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
-import { bootstrap, conversationPartners, conversationWith, getPublicUserById } from "@/lib/store";
+import { bootstrap, conversationPartners, conversationWith, getJoinRequests, getPublicUserById } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ...payload,
+      joinRequests: await getJoinRequests(),
       conversations,
       currentUser: {
         id: currentUser.id,
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ...payload,
+    joinRequests: await getJoinRequests(),
     conversations: [],
     currentUserDetail: null
   });

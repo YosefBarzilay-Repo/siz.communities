@@ -19,6 +19,8 @@ export type Group = {
   description: string;
   adminId: string;
   memberIds: string[];
+  isLocked: boolean;
+  pendingMemberIds: string[];
   createdAt: string;
 };
 
@@ -48,6 +50,13 @@ export type Message = {
   createdAt: string;
 };
 
+export type GroupJoinRequest = {
+  id: string;
+  groupId: string;
+  userId: string;
+  createdAt: string;
+};
+
 export type AuthSession = {
   id: string;
   username: string;
@@ -61,4 +70,5 @@ export type BootstrapPayload = {
   posts: Post[];
   comments: Comment[];
   messages: Message[];
+  joinRequests: GroupJoinRequest[];
 };

@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     name,
     category,
     description,
-    adminId: user.id
+    adminId: user.id,
+    isLocked: Boolean(body.isLocked)
   });
 
   broadcastUpdate("store:update", { kind: "group-created", groupId: group.id });

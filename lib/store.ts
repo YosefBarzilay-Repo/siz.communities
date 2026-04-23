@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Collection } from "mongodb";
 import { hasMongoConfig, getDbOrNull } from "./mongo";
 import { seedData, seedUsers } from "./seed";
-import type { BootstrapPayload, Comment, Group, Message, Post, User } from "./types";
+import type { BootstrapPayload, Comment, Group, GroupJoinRequest, Message, Post, User } from "./types";
 
 type PublicUser = Omit<User, "passwordHash">;
 
@@ -13,6 +13,7 @@ type StoreCollections = {
   posts: Collection<Post>;
   comments: Collection<Comment>;
   messages: Collection<Message>;
+  joinRequests: Collection<GroupJoinRequest>;
 };
 
 const omitPassword = ({ passwordHash, ...rest }: User): PublicUser => rest;
@@ -23,6 +24,7 @@ type MemoryState = {
   posts: Post[];
   comments: Comment[];
   messages: Message[];
+  joinRequests: GroupJoinRequest[];
 };
 
 declare global {
@@ -32,10 +34,11 @@ declare global {
 
 const createMemoryState = (): MemoryState => ({
   users: seedUsers.map((user) => ({ ...user, joinedGroupIds: [...user.joinedGroupIds] })),
-  groups: seedData.groups.map((group) => ({ ...group, memberIds: [...group.memberIds] })),
+  groups: seedData.groups.map((group) => ({ ...group, memberIds: [...group.memberIds], pendingMemberIds: [...group.pendingMemberIds] })),
   posts: seedData.posts.map((post) => ({ ...post })),
   comments: seedData.comments.map((comment) => ({ ...comment })),
-  messages: seedData.messages.map((message) => ({ ...message }))
+  messages: seedData.messages.map((message) => ({ ...message })),
+  joinRequests: seedData.joinRequests.map((request) => ({ ...request }))
 });
 
 const memory = globalThis.__siz_memory_store ?? createMemoryState();
@@ -54,55 +57,61 @@ const getMongoCollections = async () => {
   const posts = db.collection<Post>("posts");
   const comments = db.collection<Comment>("comments");
   const messages = db.collection<Message>("messages");
+  const joinRequests = db.collection<GroupJoinRequest>("joinRequests");
 
   if (!seededMongo) {
-    const [usersCount, groupsCount, postsCount, commentsCount, messagesCount] = await Promise.all([
+    const [usersCount, groupsCount, postsCount, commentsCount, messagesCount, joinRequestsCount] = await Promise.all([
       users.countDocuments(),
       groups.countDocuments(),
       posts.countDocuments(),
       comments.countDocuments(),
-      messages.countDocuments()
+      messages.countDocuments(),
+      joinRequests.countDocuments()
     ]);
 
-    if (!usersCount && !groupsCount && !postsCount && !commentsCount && !messagesCount) {
+    if (!usersCount && !groupsCount && !postsCount && !commentsCount && !messagesCount && !joinRequestsCount) {
       await Promise.all([
         users.insertMany(seedUsers.map((user) => ({ ...user }))),
         groups.insertMany(seedData.groups.map((group) => ({ ...group }))),
         posts.insertMany(seedData.posts.map((post) => ({ ...post }))),
         comments.insertMany(seedData.comments.map((comment) => ({ ...comment }))),
-        messages.insertMany(seedData.messages.map((message) => ({ ...message })))
+        messages.insertMany(seedData.messages.map((message) => ({ ...message }))),
+        joinRequests.insertMany(seedData.joinRequests.map((request) => ({ ...request })))
       ]);
     }
     seededMongo = true;
   }
 
-  return { users, groups, posts, comments, messages } satisfies StoreCollections;
+  return { users, groups, posts, comments, messages, joinRequests } satisfies StoreCollections;
 };
 
 const useMongo = async () => hasMongoConfig ? await getMongoCollections() : null;
 const requireMongo = async () => {
   const collections = await useMongo();
-  if (collections) {
-    return collections;
-  }
-
+  if (collections) return collections;
   if (isProduction) {
     throw new Error("MongoDB persistence is required in production. Check MONGODB_URI and network access.");
   }
-
   return null;
+};
+
+const getMemoryCurrentUser = async (currentUserId?: string | null) => {
+  if (!currentUserId) return null;
+  const user = memory.users.find((item) => item.id === currentUserId);
+  return user ? { id: user.id, username: user.username, email: user.email } : null;
 };
 
 export const bootstrap = async (currentUserId?: string | null): Promise<BootstrapPayload> => {
   const collections = await requireMongo();
 
   if (collections) {
-    const [users, groups, posts, comments, messages] = await Promise.all([
+    const [users, groups, posts, comments, messages, joinRequests] = await Promise.all([
       collections.users.find().sort({ createdAt: -1 }).toArray(),
       collections.groups.find().sort({ createdAt: -1 }).toArray(),
       collections.posts.find().sort({ createdAt: -1 }).toArray(),
       collections.comments.find().sort({ createdAt: -1 }).toArray(),
-      collections.messages.find().sort({ createdAt: -1 }).toArray()
+      collections.messages.find().sort({ createdAt: -1 }).toArray(),
+      collections.joinRequests.find().sort({ createdAt: -1 }).toArray()
     ]);
 
     return {
@@ -111,17 +120,19 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
       groups,
       posts,
       comments,
-      messages
+      messages,
+      joinRequests
     };
   }
 
   return {
-    currentUser: currentUserId ? await getPublicUserById(currentUserId) : null,
+    currentUser: await getMemoryCurrentUser(currentUserId),
     users: memory.users.map(omitPassword),
     groups: memory.groups,
     posts: memory.posts,
     comments: memory.comments,
-    messages: memory.messages
+    messages: memory.messages,
+    joinRequests: memory.joinRequests
   };
 };
 
@@ -150,6 +161,11 @@ export const getMessages = async () => {
   return collections ? collections.messages.find().sort({ createdAt: -1 }).toArray() : memory.messages;
 };
 
+export const getJoinRequests = async () => {
+  const collections = await requireMongo();
+  return collections ? collections.joinRequests.find().sort({ createdAt: -1 }).toArray() : memory.joinRequests;
+};
+
 export const getUserById = async (id: string) => {
   const collections = await requireMongo();
   return collections ? collections.users.findOne({ id }) : memory.users.find((user) => user.id === id) ?? null;
@@ -175,8 +191,6 @@ export const getPublicUserById = async (id: string): Promise<PublicUser | null> 
   const user = await getUserById(id);
   return user ? omitPassword(user) : null;
 };
-
-export const publicUsers = async () => (await getUsers()).map(omitPassword);
 
 export const createUser = async (input: {
   username: string;
@@ -218,6 +232,7 @@ export const createGroup = async (input: {
   category: string;
   description: string;
   adminId: string;
+  isLocked?: boolean;
 }) => {
   const group: Group = {
     id: randomUUID(),
@@ -226,6 +241,8 @@ export const createGroup = async (input: {
     description: input.description.trim(),
     adminId: input.adminId,
     memberIds: [input.adminId],
+    isLocked: Boolean(input.isLocked),
+    pendingMemberIds: [],
     createdAt: new Date().toISOString()
   };
 
@@ -245,7 +262,7 @@ export const createGroup = async (input: {
   return group;
 };
 
-export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, "name" | "category" | "description">>) => {
+export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, "name" | "category" | "description" | "isLocked">>) => {
   const collections = await requireMongo();
   if (collections) {
     await collections.groups.updateOne(
@@ -254,7 +271,8 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
         $set: {
           ...(updates.name ? { name: updates.name.trim() } : {}),
           ...(updates.category ? { category: updates.category.trim() } : {}),
-          ...(updates.description ? { description: updates.description.trim() } : {})
+          ...(updates.description ? { description: updates.description.trim() } : {}),
+          ...(typeof updates.isLocked === "boolean" ? { isLocked: updates.isLocked } : {})
         }
       }
     );
@@ -266,7 +284,8 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
   Object.assign(group, {
     ...(updates.name ? { name: updates.name.trim() } : {}),
     ...(updates.category ? { category: updates.category.trim() } : {}),
-    ...(updates.description ? { description: updates.description.trim() } : {})
+    ...(updates.description ? { description: updates.description.trim() } : {}),
+    ...(typeof updates.isLocked === "boolean" ? { isLocked: updates.isLocked } : {})
   });
   return group;
 };
@@ -274,6 +293,14 @@ export const updateGroup = async (groupId: string, updates: Partial<Pick<Group, 
 export const joinGroup = async (groupId: string, userId: string) => {
   const collections = await requireMongo();
   if (collections) {
+    const group = await collections.groups.findOne({ id: groupId });
+    if (!group) return null;
+    if (group.isLocked) {
+      await collections.groups.updateOne({ id: groupId }, { $addToSet: { pendingMemberIds: userId } });
+      await collections.joinRequests.insertOne({ id: randomUUID(), groupId, userId, createdAt: new Date().toISOString() });
+      return group;
+    }
+
     await Promise.all([
       collections.groups.updateOne({ id: groupId }, { $addToSet: { memberIds: userId } }),
       collections.users.updateOne({ id: userId }, { $addToSet: { joinedGroupIds: groupId } })
@@ -284,8 +311,36 @@ export const joinGroup = async (groupId: string, userId: string) => {
   const group = memory.groups.find((item) => item.id === groupId) ?? null;
   const user = memory.users.find((item) => item.id === userId) ?? null;
   if (!group || !user) return null;
+  if (group.isLocked) {
+    if (!group.pendingMemberIds.includes(userId)) group.pendingMemberIds.unshift(userId);
+    if (!memory.joinRequests.some((request) => request.groupId === groupId && request.userId === userId)) {
+      memory.joinRequests.unshift({ id: randomUUID(), groupId, userId, createdAt: new Date().toISOString() });
+    }
+    return group;
+  }
   if (!group.memberIds.includes(userId)) group.memberIds.unshift(userId);
   if (!user.joinedGroupIds.includes(groupId)) user.joinedGroupIds.unshift(groupId);
+  return group;
+};
+
+export const approveJoinRequest = async (groupId: string, userId: string) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await Promise.all([
+      collections.groups.updateOne({ id: groupId }, { $pull: { pendingMemberIds: userId }, $addToSet: { memberIds: userId } }),
+      collections.users.updateOne({ id: userId }, { $addToSet: { joinedGroupIds: groupId } }),
+      collections.joinRequests.deleteMany({ groupId, userId })
+    ]);
+    return getGroupById(groupId);
+  }
+
+  const group = memory.groups.find((item) => item.id === groupId) ?? null;
+  const user = memory.users.find((item) => item.id === userId) ?? null;
+  if (!group || !user) return null;
+  group.pendingMemberIds = group.pendingMemberIds.filter((id) => id !== userId);
+  if (!group.memberIds.includes(userId)) group.memberIds.unshift(userId);
+  if (!user.joinedGroupIds.includes(groupId)) user.joinedGroupIds.unshift(groupId);
+  memory.joinRequests = memory.joinRequests.filter((request) => !(request.groupId === groupId && request.userId === userId));
   return group;
 };
 
@@ -314,7 +369,8 @@ export const deleteGroup = async (groupId: string) => {
     await Promise.all([
       collections.groups.deleteOne({ id: groupId }),
       collections.posts.deleteMany({ groupId }),
-      collections.comments.deleteMany({ postId: { $in: postIds } })
+      collections.comments.deleteMany({ postId: { $in: postIds } }),
+      collections.joinRequests.deleteMany({ groupId })
     ]);
     return;
   }
@@ -323,6 +379,7 @@ export const deleteGroup = async (groupId: string) => {
   memory.groups = memory.groups.filter((group) => group.id !== groupId);
   memory.posts = memory.posts.filter((post) => post.groupId !== groupId);
   memory.comments = memory.comments.filter((comment) => !postIds.includes(comment.postId));
+  memory.joinRequests = memory.joinRequests.filter((request) => request.groupId !== groupId);
 };
 
 export const createPost = async (input: {
