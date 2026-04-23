@@ -11,7 +11,7 @@ type AppData = BootstrapPayload & {
   currentUserDetail: PublicUser | null;
 };
 
-type View = "groups" | "group" | "join" | "create" | "profile" | "group-settings";
+type View = "groups" | "group" | "join" | "create" | "profile" | "group-settings" | "privacy" | "terms" | "accessibility" | "security" | "my-data";
 
 const emptyData: AppData = {
   currentUser: null,
@@ -59,6 +59,8 @@ const errorMessageMap: Record<string, string> = {
   "Invalid credentials": "פרטי התחברות לא תקינים",
   "Email already exists": "האימייל כבר קיים",
   "Group name is required": "נדרש שם לקבוצה",
+  "Consent required": "נדרשת הסכמה לתנאים ולמדיניות",
+  "Missing recipient or text": "חסר נמען או טקסט",
   EMAIL_TAKEN: "האימייל כבר קיים",
   "You cannot write in this group": "אין לך אפשרות לכתוב בקבוצה הזו"
 };
@@ -148,6 +150,11 @@ export default function CommunityApp() {
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ username: "", email: "", password: "" });
+  const [registerConsent, setRegisterConsent] = useState({
+    acceptTerms: false,
+    acceptPrivacy: false,
+    marketingOptIn: false
+  });
   const [newGroup, setNewGroup] = useState({ name: "", description: "", requiresApproval: false });
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const selectedGroupIdRef = useRef("");
@@ -234,6 +241,10 @@ export default function CommunityApp() {
   }, [joinedGroups, currentUser?.id, data.users, isSuperUser, data.groups]);
 
   const selectedPartner = selectedPartnerId ? userById(selectedPartnerId) ?? null : messagePartners[0] ?? groupContacts[0] ?? null;
+  const isConversationBlocked = Boolean(
+    selectedPartner &&
+      (currentUserDetail?.blockedUserIds?.includes(selectedPartner.id) || selectedPartner.blockedUserIds?.includes(currentUser?.id ?? ""))
+  );
   const currentConversation = selectedPartner
     ? data.messages
         .filter((message) =>
@@ -254,6 +265,12 @@ export default function CommunityApp() {
     setSelectedPartnerId(userId);
     setMessageText("");
     setView("profile");
+  };
+
+  const openRoute = (path: string) => {
+    if (typeof window !== "undefined") {
+      window.location.href = path;
+    }
   };
 
   const askConfirm = (action: ConfirmAction) => {
@@ -357,13 +374,17 @@ export default function CommunityApp() {
     setError("");
     const payload = await api<{ user: PublicUser; token: string }>("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify(registerForm)
+      body: JSON.stringify({
+        ...registerForm,
+        ...registerConsent
+      })
     });
     writeStoredToken(payload.token);
     setHasSeenIntro(false);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("siz_seen_intro", "0");
     }
+    setRegisterConsent({ acceptTerms: false, acceptPrivacy: false, marketingOptIn: false });
     await refresh();
   };
 
@@ -551,6 +572,63 @@ export default function CommunityApp() {
     await refresh();
   };
 
+  const handleToggleBlockSelectedPartner = async () => {
+    if (!selectedPartner?.id) return;
+    const blocked = Boolean(currentUserDetail?.blockedUserIds?.includes(selectedPartner.id));
+    await api("/api/messages/block", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId: selectedPartner.id, blocked: !blocked })
+    });
+    await refresh();
+  };
+
+  const handleReportSelectedPartner = async () => {
+    if (!selectedPartner?.id) return;
+    const lastMessage = [...currentConversation].reverse()[0];
+    await api("/api/messages/report", {
+      method: "POST",
+      body: JSON.stringify({
+        targetUserId: selectedPartner.id,
+        messageId: lastMessage?.id ?? null,
+        reason: "דיווח על הטרדה, תוכן לא ראוי או פגיעה"
+      })
+    });
+    await refresh();
+  };
+
+  const handleDownloadMyData = async () => {
+    const payload = await api<AppData>("/api/me");
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `siz-data-${currentUser?.id ?? "user"}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteMyMessages = async () => {
+    await api("/api/me/messages", { method: "DELETE" });
+    await refresh();
+  };
+
+  const handleDeleteMyAccount = async () => {
+    await api("/api/me", { method: "DELETE" });
+    clearStoredToken();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("siz_seen_intro");
+    }
+    setData(emptyData);
+    setView("groups");
+    setSelectedGroupId("");
+    setSelectedPartnerId("");
+    setMessageText("");
+    setPostText("");
+    setCommentText("");
+    setPostImage("");
+    setUploadName("");
+  };
+
   const handleComposerSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedGroup) return;
@@ -669,6 +747,48 @@ export default function CommunityApp() {
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
                 placeholder="סיסמה"
               />
+              <label className="flex items-start gap-3 rounded-2xl bg-surface-soft px-4 py-3 text-right text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={registerConsent.acceptTerms}
+                  onChange={(event) => setRegisterConsent((prev) => ({ ...prev, acceptTerms: event.target.checked }))}
+                  className="mt-1"
+                  required
+                />
+                <span>
+                  אני מאשר/ת את{" "}
+                  <button type="button" onClick={() => openRoute("/terms")} className="font-semibold text-primary underline">
+                    תנאי השימוש
+                  </button>{" "}
+                  ואת{" "}
+                  <button type="button" onClick={() => openRoute("/privacy-policy")} className="font-semibold text-primary underline">
+                    מדיניות הפרטיות
+                  </button>
+                  .
+                </span>
+              </label>
+              <label className="flex items-start gap-3 rounded-2xl bg-surface-soft px-4 py-3 text-right text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={registerConsent.acceptPrivacy}
+                  onChange={(event) => setRegisterConsent((prev) => ({ ...prev, acceptPrivacy: event.target.checked }))}
+                  className="mt-1"
+                  required
+                />
+                <span>אני מאשר/ת איסוף ושמירת נתונים לצורך הפעלת השירות, בהתאם להודעת האיסוף.</span>
+              </label>
+              <label className="flex items-start gap-3 rounded-2xl bg-surface-soft px-4 py-3 text-right text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={registerConsent.marketingOptIn}
+                  onChange={(event) => setRegisterConsent((prev) => ({ ...prev, marketingOptIn: event.target.checked }))}
+                  className="mt-1"
+                />
+                <span>אני מסכים/ה לקבל דיוור שיווקי ועדכונים, ויודע/ת שאפשר לבטל זאת בכל עת.</span>
+              </label>
+              <div className="rounded-2xl border border-dashed border-surface-border px-4 py-3 text-right text-xs leading-6 text-text-muted">
+                <span className="font-semibold text-text">הודעת איסוף:</span> אינכם חייבים למסור את המידע לפי חוק, אך בלעדיו לא נוכל לספק את השירות, לאמת משתמשים ולשמור על בטיחות הקהילה.
+              </div>
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
                 הרשמה
               </button>
@@ -676,6 +796,21 @@ export default function CommunityApp() {
           )}
 
           {error ? <div className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-danger">{error}</div> : null}
+
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+            <button type="button" onClick={() => openRoute("/privacy-policy")} className="rounded-full bg-surface-soft px-3 py-2 font-semibold text-text">
+              פרטיות
+            </button>
+            <button type="button" onClick={() => openRoute("/terms")} className="rounded-full bg-surface-soft px-3 py-2 font-semibold text-text">
+              תנאים
+            </button>
+            <button type="button" onClick={() => openRoute("/accessibility")} className="rounded-full bg-surface-soft px-3 py-2 font-semibold text-text">
+              נגישות
+            </button>
+            <button type="button" onClick={() => openRoute("/security")} className="rounded-full bg-surface-soft px-3 py-2 font-semibold text-text">
+              אבטחה
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -717,7 +852,7 @@ export default function CommunityApp() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col px-3 py-3">
+      <main className="flex min-h-0 flex-1 flex-col px-3 py-3 pb-24">
         {!hasSeenIntro ? (
           <ShellCard className="mb-4 p-4 text-right">
             <div className="text-lg font-bold text-text">ברוכים הבאים ל-SIZ</div>
@@ -968,9 +1103,31 @@ export default function CommunityApp() {
                   >
                     {partner.username}
                   </button>
-                  ))}
+                ))}
                 {!messagePartners.length ? <div className="text-sm text-text-muted">אין שיחות עדיין</div> : null}
               </div>
+
+              {selectedPartner && selectedPartner.id !== currentUser?.id ? (
+                <div className="mb-3 rounded-2xl bg-surface-soft px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-text">{selectedPartner.username}</div>
+                      <div className="text-xs text-text-muted">
+                        {currentUserDetail?.blockedUserIds?.includes(selectedPartner.id) ? "המשתמש חסום אצלך" : "המשתמש פתוח לשיחה"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handleToggleBlockSelectedPartner} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-text">
+                        {currentUserDetail?.blockedUserIds?.includes(selectedPartner.id) ? "שחרור חסימה" : "חסימה"}
+                      </button>
+                      <button type="button" onClick={handleReportSelectedPartner} className="rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-danger">
+                        דיווח
+                      </button>
+                    </div>
+                  </div>
+                  {isConversationBlocked ? <div className="mt-2 text-xs text-danger">לא ניתן לשלוח הודעות בשיחה זו עד להסרת החסימה.</div> : null}
+                </div>
+              ) : null}
 
               <div className="rounded-2xl bg-surface-soft p-3">
                 <div className="mb-3 max-h-72 space-y-2 overflow-y-auto">
@@ -1005,12 +1162,12 @@ export default function CommunityApp() {
                     onChange={(event) => setMessageText(event.target.value)}
                     className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
                     placeholder={selectedPartner ? `הודעה ל-${selectedPartner.username}` : "בחרו אדם תחילה"}
-                    disabled={!selectedPartner}
+                    disabled={!selectedPartner || isConversationBlocked}
                   />
                   <button
                     type="submit"
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50"
-                    disabled={!selectedPartner || isWriteBlockedUser}
+                    disabled={!selectedPartner || isWriteBlockedUser || isConversationBlocked}
                     aria-label="send message"
                   >
                     <Send className="h-4 w-4" />
@@ -1722,6 +1879,26 @@ export default function CommunityApp() {
           </ShellCard>
         ) : null}
       </main>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/95 px-3 py-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="mx-auto flex max-w-md items-center gap-2 overflow-x-auto">
+          <button type="button" onClick={() => openRoute("/privacy-policy")} className="shrink-0 rounded-full bg-surface-soft px-3 py-2 text-xs font-semibold text-text">
+            פרטיות
+          </button>
+          <button type="button" onClick={() => openRoute("/terms")} className="shrink-0 rounded-full bg-surface-soft px-3 py-2 text-xs font-semibold text-text">
+            תנאים
+          </button>
+          <button type="button" onClick={() => openRoute("/accessibility")} className="shrink-0 rounded-full bg-surface-soft px-3 py-2 text-xs font-semibold text-text">
+            נגישות
+          </button>
+          <button type="button" onClick={() => openRoute("/security")} className="shrink-0 rounded-full bg-surface-soft px-3 py-2 text-xs font-semibold text-text">
+            אבטחה
+          </button>
+          <button type="button" onClick={() => openRoute("/my-data")} className="shrink-0 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-white">
+            הנתונים שלי
+          </button>
+        </div>
+      </div>
 
       {confirmAction ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-3 sm:items-center">

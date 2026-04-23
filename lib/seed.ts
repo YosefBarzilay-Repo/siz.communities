@@ -14,6 +14,10 @@ const createUser = (username: string, email: string, password: string, bio: stri
   isSuperUser: false,
   isLocked: false,
   isDisabled: false,
+  blockedUserIds: [],
+  marketingOptIn: false,
+  acceptedTermsAt: daysAgo(30),
+  acceptedPrivacyAt: daysAgo(30),
   bio,
   createdAt: daysAgo(30)
 });

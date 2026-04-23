@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Collection } from "mongodb";
 import { hasMongoConfig, getDbOrNull } from "./mongo";
 import { seedData, seedUsers } from "./seed";
-import type { BootstrapPayload, Comment, Group, GroupJoinRequest, Message, Post, User } from "./types";
+import type { BootstrapPayload, Comment, Group, GroupJoinRequest, Message, MessageReport, Post, User } from "./types";
 
 type PublicUser = Omit<User, "passwordHash">;
 
@@ -13,6 +13,7 @@ type StoreCollections = {
   posts: Collection<Post>;
   comments: Collection<Comment>;
   messages: Collection<Message>;
+  messageReports: Collection<MessageReport>;
   joinRequests: Collection<GroupJoinRequest>;
 };
 
@@ -28,7 +29,16 @@ export const isSuperUserUser = (user: Pick<User, "email" | "isSuperUser">) =>
   Boolean(user.isSuperUser || getSuperUserEmails().has(user.email.toLowerCase()));
 
 const normalizeUser = (user: User | null): User | null =>
-  user ? { ...user, isSuperUser: isSuperUserUser(user) } : null;
+  user
+    ? {
+        ...user,
+        blockedUserIds: user.blockedUserIds ?? [],
+        marketingOptIn: Boolean(user.marketingOptIn),
+        acceptedTermsAt: user.acceptedTermsAt ?? null,
+        acceptedPrivacyAt: user.acceptedPrivacyAt ?? null,
+        isSuperUser: isSuperUserUser(user)
+      }
+    : null;
 
 const normalizeGroup = (group: Group | null): Group | null =>
   group
@@ -51,6 +61,7 @@ type MemoryState = {
   posts: Post[];
   comments: Comment[];
   messages: Message[];
+  messageReports: MessageReport[];
   joinRequests: GroupJoinRequest[];
 };
 
@@ -60,7 +71,11 @@ declare global {
 }
 
 const createMemoryState = (): MemoryState => ({
-  users: seedUsers.map((user) => ({ ...user, joinedGroupIds: [...user.joinedGroupIds] })),
+  users: seedUsers.map((user) => ({
+    ...user,
+    joinedGroupIds: [...user.joinedGroupIds],
+    blockedUserIds: [...user.blockedUserIds]
+  })),
   groups: seedData.groups.map((group) => ({
     ...group,
     memberIds: [...group.memberIds],
@@ -70,6 +85,7 @@ const createMemoryState = (): MemoryState => ({
   posts: seedData.posts.map((post) => ({ ...post })),
   comments: seedData.comments.map((comment) => ({ ...comment })),
   messages: seedData.messages.map((message) => ({ ...message })),
+  messageReports: [],
   joinRequests: seedData.joinRequests.map((request) => ({ ...request }))
 });
 
@@ -89,32 +105,35 @@ const getMongoCollections = async () => {
   const posts = db.collection<Post>("posts");
   const comments = db.collection<Comment>("comments");
   const messages = db.collection<Message>("messages");
+  const messageReports = db.collection<MessageReport>("messageReports");
   const joinRequests = db.collection<GroupJoinRequest>("joinRequests");
 
   if (!seededMongo) {
-    const [usersCount, groupsCount, postsCount, commentsCount, messagesCount, joinRequestsCount] = await Promise.all([
+    const [usersCount, groupsCount, postsCount, commentsCount, messagesCount, messageReportsCount, joinRequestsCount] = await Promise.all([
       users.countDocuments(),
       groups.countDocuments(),
       posts.countDocuments(),
       comments.countDocuments(),
       messages.countDocuments(),
+      messageReports.countDocuments(),
       joinRequests.countDocuments()
     ]);
 
-    if (!usersCount && !groupsCount && !postsCount && !commentsCount && !messagesCount && !joinRequestsCount) {
+    if (!usersCount && !groupsCount && !postsCount && !commentsCount && !messagesCount && !messageReportsCount && !joinRequestsCount) {
       await Promise.all([
         users.insertMany(seedUsers.map((user) => ({ ...user }))),
         groups.insertMany(seedData.groups.map((group) => ({ ...group }))),
         posts.insertMany(seedData.posts.map((post) => ({ ...post }))),
         comments.insertMany(seedData.comments.map((comment) => ({ ...comment }))),
         messages.insertMany(seedData.messages.map((message) => ({ ...message }))),
+        messageReports.insertMany([]),
         joinRequests.insertMany(seedData.joinRequests.map((request) => ({ ...request })))
       ]);
     }
     seededMongo = true;
   }
 
-  return { users, groups, posts, comments, messages, joinRequests } satisfies StoreCollections;
+  return { users, groups, posts, comments, messages, messageReports, joinRequests } satisfies StoreCollections;
 };
 
 const useMongo = async () => hasMongoConfig ? await getMongoCollections() : null;
@@ -137,12 +156,13 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
   const collections = await requireMongo();
 
   if (collections) {
-    const [users, groups, posts, comments, messages, joinRequests] = await Promise.all([
+    const [users, groups, posts, comments, messages, messageReports, joinRequests] = await Promise.all([
       collections.users.find().sort({ createdAt: -1 }).toArray(),
       collections.groups.find().sort({ createdAt: -1 }).toArray(),
       collections.posts.find().sort({ createdAt: -1 }).toArray(),
       collections.comments.find().sort({ createdAt: -1 }).toArray(),
       collections.messages.find().sort({ createdAt: -1 }).toArray(),
+      collections.messageReports.find().sort({ createdAt: -1 }).toArray(),
       collections.joinRequests.find().sort({ createdAt: -1 }).toArray()
     ]);
 
@@ -153,6 +173,7 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
       posts,
       comments,
       messages,
+      messageReports,
       joinRequests
     };
   }
@@ -164,6 +185,7 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
     posts: memory.posts,
     comments: memory.comments,
     messages: memory.messages,
+    messageReports: memory.messageReports,
     joinRequests: memory.joinRequests
   };
 };
@@ -171,7 +193,7 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
 export const getUsers = async () => {
   const collections = await requireMongo();
   const users = collections ? await collections.users.find().sort({ createdAt: -1 }).toArray() : memory.users;
-  return users.map((user) => ({ ...user, isSuperUser: isSuperUserUser(user) }));
+  return users.map((user) => omitPassword(normalizeUser(user) as User));
 };
 
 export const getGroups = async () => {
@@ -193,6 +215,11 @@ export const getComments = async () => {
 export const getMessages = async () => {
   const collections = await requireMongo();
   return collections ? collections.messages.find().sort({ createdAt: -1 }).toArray() : memory.messages;
+};
+
+export const getMessageReports = async () => {
+  const collections = await requireMongo();
+  return collections ? collections.messageReports.find().sort({ createdAt: -1 }).toArray() : memory.messageReports;
 };
 
 export const getJoinRequests = async () => {
@@ -239,6 +266,9 @@ export const createUser = async (input: {
   email: string;
   password: string;
   bio?: string;
+  marketingOptIn?: boolean;
+  acceptedTermsAt?: string | null;
+  acceptedPrivacyAt?: string | null;
 }) => {
   const existing = await getUserByEmail(input.email);
   if (existing) throw new Error("EMAIL_TAKEN");
@@ -249,9 +279,13 @@ export const createUser = async (input: {
     email: input.email.trim().toLowerCase(),
     passwordHash: await bcrypt.hash(input.password, 10),
     joinedGroupIds: [],
+    blockedUserIds: [],
     isSuperUser: getSuperUserEmails().has(input.email.trim().toLowerCase()),
     isLocked: false,
     isDisabled: false,
+    marketingOptIn: Boolean(input.marketingOptIn),
+    acceptedTermsAt: input.acceptedTermsAt ?? null,
+    acceptedPrivacyAt: input.acceptedPrivacyAt ?? null,
     bio: input.bio?.trim() || "Community member on SIZ",
     createdAt: new Date().toISOString()
   };
@@ -683,7 +717,13 @@ export const sendMessage = async (input: {
   senderId: string;
   receiverId: string;
   text: string;
-}) => {
+}): Promise<Message | null> => {
+  const [sender, receiver] = await Promise.all([getUserById(input.senderId), getUserById(input.receiverId)]);
+  if (!sender || !receiver) return null;
+  if (sender.blockedUserIds.includes(receiver.id) || receiver.blockedUserIds.includes(sender.id)) {
+    throw new Error("Not allowed");
+  }
+
   const message: Message = {
     id: randomUUID(),
     senderId: input.senderId,
@@ -699,6 +739,58 @@ export const sendMessage = async (input: {
     memory.messages.unshift(message);
   }
   return message;
+};
+
+export const setMessageBlock = async (userId: string, targetUserId: string, blocked: boolean) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.users.updateOne(
+      { id: userId },
+      blocked ? { $addToSet: { blockedUserIds: targetUserId } } : { $pull: { blockedUserIds: targetUserId } }
+    );
+    return getPublicUserById(userId);
+  }
+
+  const user = memory.users.find((item) => item.id === userId) ?? null;
+  if (!user) return null;
+  user.blockedUserIds = blocked
+    ? Array.from(new Set([targetUserId, ...user.blockedUserIds]))
+    : user.blockedUserIds.filter((id) => id !== targetUserId);
+  return omitPassword(user);
+};
+
+export const addMessageReport = async (input: {
+  reporterId: string;
+  targetUserId: string;
+  messageId?: string | null;
+  reason: string;
+}) => {
+  const report: MessageReport = {
+    id: randomUUID(),
+    reporterId: input.reporterId,
+    targetUserId: input.targetUserId,
+    messageId: input.messageId ?? null,
+    reason: input.reason.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.messageReports.insertOne(report);
+  } else {
+    memory.messageReports.unshift(report);
+  }
+  return report;
+};
+
+export const deleteOwnMessages = async (userId: string) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.messages.deleteMany({ $or: [{ senderId: userId }, { receiverId: userId }] });
+    return;
+  }
+
+  memory.messages = memory.messages.filter((message) => message.senderId !== userId && message.receiverId !== userId);
 };
 
 export const conversationPartners = async (userId: string) => {

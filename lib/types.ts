@@ -11,6 +11,10 @@ export type User = {
   isSuperUser: boolean;
   isLocked: boolean;
   isDisabled: boolean;
+  blockedUserIds: string[];
+  marketingOptIn: boolean;
+  acceptedTermsAt: string | null;
+  acceptedPrivacyAt: string | null;
   bio: string;
   createdAt: string;
 };
@@ -61,6 +65,15 @@ export type Message = {
   createdAt: string;
 };
 
+export type MessageReport = {
+  id: string;
+  reporterId: string;
+  targetUserId: string;
+  messageId: string | null;
+  reason: string;
+  createdAt: string;
+};
+
 export type GroupJoinRequest = {
   id: string;
   groupId: string;
@@ -82,5 +95,6 @@ export type BootstrapPayload = {
   posts: Post[];
   comments: Comment[];
   messages: Message[];
+  messageReports?: MessageReport[];
   joinRequests: GroupJoinRequest[];
 };

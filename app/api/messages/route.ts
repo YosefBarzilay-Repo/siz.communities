@@ -48,11 +48,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const message = await sendMessage({
-    senderId: user.id,
-    receiverId,
-    text
-  });
+  let message;
+  try {
+    message = await sendMessage({
+      senderId: user.id,
+      receiverId,
+      text
+    });
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : "An error occurred";
+    return NextResponse.json({ error: messageText }, { status: 403 });
+  }
+
+  if (!message) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
 
   broadcastUpdate("store:update", { kind: "message-created", receiverId, senderId: user.id });
   return NextResponse.json({ message }, { status: 201 });
