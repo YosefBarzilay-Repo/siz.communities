@@ -71,6 +71,7 @@ const posts: Post[] = [
     text: "שולחן עבודה לבן, מצב מצוין. מתאים ללימודים או לפינת עבודה ביתית. איסוף מהרצל 18.",
     imageUrl: "",
     type: "sale",
+    isLocked: false,
     createdAt: daysAgo(1)
   },
   {
@@ -80,6 +81,7 @@ const posts: Post[] = [
     text: "כיסא אוכל לתינוק למסירה. נקי, יציב, ללא צורך בהרכבה.",
     imageUrl: "",
     type: "giveaway",
+    isLocked: false,
     createdAt: daysAgo(2)
   },
   {
@@ -89,6 +91,7 @@ const posts: Post[] = [
     text: "מקרר מיני, עובד מצוין. מחפש קנייה מהירה כי עוברים דירה בסוף השבוע.",
     imageUrl: "",
     type: "sale",
+    isLocked: false,
     createdAt: daysAgo(1)
   }
 ];

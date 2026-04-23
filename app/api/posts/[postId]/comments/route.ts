@@ -26,8 +26,12 @@ export async function POST(request: NextRequest, context: Params) {
   }
 
   const { postId } = await context.params;
-  if (!(await getPostById(postId))) {
-    return NextResponse.json({ error: "הפוסט לא נמצא" }, { status: 404 });
+  const post = await getPostById(postId);
+  if (!post) {
+    return NextResponse.json({ error: "השרשור לא נמצא" }, { status: 404 });
+  }
+  if (post.isLocked) {
+    return NextResponse.json({ error: "השרשור נעול" }, { status: 423 });
   }
 
   const body = await request.json();

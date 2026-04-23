@@ -12,16 +12,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const user = await getUserFromRequest(request);
   if (!user) {
-    return NextResponse.json({ error: "נדרש להתחבר" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const body = await request.json();
   const name = String(body.name ?? "").trim();
-  const category = String(body.category ?? "").trim();
+  const category = String(body.category ?? "כללי").trim() || "כללי";
   const description = String(body.description ?? "").trim();
 
-  if (name.length < 2 || category.length < 2) {
-    return NextResponse.json({ error: "שם וקטגוריה נדרשים" }, { status: 400 });
+  if (name.length < 2) {
+    return NextResponse.json({ error: "Group name is required" }, { status: 400 });
   }
 
   const group = await createGroup({

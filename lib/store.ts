@@ -396,6 +396,7 @@ export const createPost = async (input: {
     text: input.text.trim(),
     imageUrl: input.imageUrl?.trim() || "",
     type: input.type,
+    isLocked: false,
     createdAt: new Date().toISOString()
   };
 
@@ -449,6 +450,28 @@ export const deleteComment = async (commentId: string) => {
   }
 
   memory.comments = memory.comments.filter((comment) => comment.id !== commentId);
+};
+
+export const lockPost = async (postId: string, lockedBy: string, isLocked: boolean) => {
+  const collections = await requireMongo();
+  if (collections) {
+    await collections.posts.updateOne(
+      { id: postId },
+      {
+        $set: isLocked
+          ? { isLocked: true, lockedBy, lockedAt: new Date().toISOString() }
+          : { isLocked: false, lockedBy: "", lockedAt: "" }
+      }
+    );
+    return getPostById(postId);
+  }
+
+  const post = memory.posts.find((item) => item.id === postId) ?? null;
+  if (!post) return null;
+  Object.assign(post, isLocked
+    ? { isLocked: true, lockedBy, lockedAt: new Date().toISOString() }
+    : { isLocked: false, lockedBy: "", lockedAt: "" });
+  return post;
 };
 
 export const sendMessage = async (input: {

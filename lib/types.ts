@@ -31,6 +31,9 @@ export type Post = {
   text: string;
   imageUrl?: string;
   type: ListingType;
+  isLocked: boolean;
+  lockedBy?: string;
+  lockedAt?: string;
   createdAt: string;
 };
 

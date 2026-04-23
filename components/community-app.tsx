@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { io } from "socket.io-client";
-import type { BootstrapPayload, Comment, Group, Post } from "@/lib/types";
-import { ArrowLeft, Lock, Plus, Send, Store, Upload, Users } from "lucide-react";
+import { ArrowLeft, Lock, MessageCircle, Plus, Send, Store, Upload, UserRound, X } from "lucide-react";
+import type { BootstrapPayload, Group, Post } from "@/lib/types";
 
 type PublicUser = BootstrapPayload["users"][number];
 
@@ -11,7 +11,7 @@ type AppData = BootstrapPayload & {
   currentUserDetail: PublicUser | null;
 };
 
-type View = "groups" | "group" | "join" | "create";
+type View = "groups" | "group" | "join" | "create" | "profile";
 
 const emptyData: AppData = {
   currentUser: null,
@@ -43,9 +43,10 @@ const clearStoredToken = () => {
 
 const api = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   const storedToken = readStoredToken();
-  const requestUrl = storedToken && !url.includes("token=")
-    ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(storedToken)}`
-    : url;
+  const requestUrl =
+    storedToken && !url.includes("token=")
+      ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(storedToken)}`
+      : url;
 
   const response = await fetch(requestUrl, {
     ...init,
@@ -87,19 +88,23 @@ export default function CommunityApp() {
   const [error, setError] = useState("");
   const [view, setView] = useState<View>("groups");
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [replyTargetPostId, setReplyTargetPostId] = useState("");
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [selectedPostId, setSelectedPostId] = useState("");
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [messageText, setMessageText] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ username: "", email: "", password: "" });
-  const [newGroup, setNewGroup] = useState({ name: "", category: "", description: "", isLocked: false });
+  const [newGroup, setNewGroup] = useState({ name: "", description: "", isLocked: false });
 
   const currentUser = data.currentUser;
   const currentUserDetail = data.currentUserDetail;
+
+  const userById = (id: string) => data.users.find((user) => user.id === id);
 
   const joinedGroups = useMemo(() => {
     const joinedIds = new Set(currentUserDetail?.joinedGroupIds ?? []);
@@ -123,12 +128,34 @@ export default function CommunityApp() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [data.posts, selectedGroup]);
 
-  const selectedPost = data.posts.find((post) => post.id === selectedPostId) ?? null;
-  const commentsForSelectedPost = data.comments
-    .filter((comment) => comment.postId === selectedPostId)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const activeReplyPost = replyTargetPostId ? data.posts.find((post) => post.id === replyTargetPostId) ?? null : null;
+  const activeReplyAuthor = activeReplyPost ? userById(activeReplyPost.userId) : null;
+  const canManageGroup = Boolean(currentUser && selectedGroup && currentUser.id === selectedGroup.adminId);
 
-  const userById = (id: string) => data.users.find((user) => user.id === id);
+  const messagePartners = useMemo(() => {
+    const partnerIds = new Set<string>();
+    data.messages.forEach((message) => {
+      if (message.senderId === currentUser?.id) partnerIds.add(message.receiverId);
+      if (message.receiverId === currentUser?.id) partnerIds.add(message.senderId);
+    });
+    return [...partnerIds].map((id) => userById(id)).filter(Boolean) as PublicUser[];
+  }, [data.messages, currentUser?.id, data.users]);
+
+  const selectedPartner = selectedPartnerId ? userById(selectedPartnerId) ?? null : messagePartners[0] ?? null;
+  const currentConversation = selectedPartner
+    ? data.messages
+        .filter((message) =>
+          (message.senderId === currentUser?.id && message.receiverId === selectedPartner.id) ||
+          (message.senderId === selectedPartner.id && message.receiverId === currentUser?.id)
+        )
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    : [];
+
+  const recentNotifications = useMemo(() => {
+    return data.messages
+      .filter((message) => message.receiverId === currentUser?.id)
+      .slice(0, 5);
+  }, [data.messages, currentUser?.id]);
 
   const refresh = async () => {
     const payload = await api<AppData>("/api/bootstrap");
@@ -157,6 +184,18 @@ export default function CommunityApp() {
       socket.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (replyTargetPostId && !groupPosts.some((post) => post.id === replyTargetPostId)) {
+      setReplyTargetPostId("");
+    }
+  }, [groupPosts, replyTargetPostId, selectedGroup]);
+
+  useEffect(() => {
+    if (!selectedPartnerId && messagePartners[0]) {
+      setSelectedPartnerId(messagePartners[0].id);
+    }
+  }, [messagePartners, selectedPartnerId]);
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -197,15 +236,27 @@ export default function CommunityApp() {
     setData(emptyData);
     setView("groups");
     setSelectedGroupId("");
-    setSelectedPostId("");
+    setReplyTargetPostId("");
     setPostText("");
     setPostImage("");
     setUploadName("");
     setCommentText("");
+    setSelectedPartnerId("");
+    setMessageText("");
   };
 
   const handleJoinGroup = async (groupId: string) => {
     await api(`/api/groups/${groupId}/join`, { method: "POST" });
+    await refresh();
+    setView("groups");
+  };
+
+  const handleLeaveGroup = async (groupId: string) => {
+    await api(`/api/groups/${groupId}/join`, { method: "DELETE" });
+    setSelectedGroupId("");
+    setReplyTargetPostId("");
+    setCommentText("");
+    setPostText("");
     await refresh();
     setView("groups");
   };
@@ -216,7 +267,7 @@ export default function CommunityApp() {
       method: "POST",
       body: JSON.stringify(newGroup)
     });
-    setNewGroup({ name: "", category: "", description: "", isLocked: false });
+    setNewGroup({ name: "", description: "", isLocked: false });
     await refresh();
     setView("groups");
   };
@@ -229,32 +280,22 @@ export default function CommunityApp() {
     await refresh();
   };
 
-  const handlePost = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedGroup) return;
-    await api("/api/posts", {
-      method: "POST",
-      body: JSON.stringify({
-        groupId: selectedGroup.id,
-        text: postText,
-        imageUrl: postImage,
-        type: "sale"
-      })
+  const handleTogglePostLock = async (postId: string, locked: boolean) => {
+    await api(`/api/posts/${postId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ locked })
     });
-    setPostText("");
-    setPostImage("");
-    setUploadName("");
     await refresh();
   };
 
-  const handleComment = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedPost) return;
-    await api(`/api/posts/${selectedPost.id}/comments`, {
-      method: "POST",
-      body: JSON.stringify({ text: commentText })
+  const handleDeletePost = async (postId: string) => {
+    await api(`/api/posts/${postId}`, {
+      method: "DELETE"
     });
-    setCommentText("");
+    if (replyTargetPostId === postId) {
+      setReplyTargetPostId("");
+      setCommentText("");
+    }
     await refresh();
   };
 
@@ -268,20 +309,52 @@ export default function CommunityApp() {
     reader.readAsDataURL(file);
   };
 
-  useEffect(() => {
-    if (!selectedGroup && joinedGroups[0]) {
-      setSelectedGroupId(joinedGroups[0].id);
-    }
-  }, [joinedGroups, selectedGroup]);
+  const handleSendMessage = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedPartner?.id || !messageText.trim()) return;
+    await api("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ receiverId: selectedPartner.id, text: messageText })
+    });
+    setMessageText("");
+    await refresh();
+  };
 
-  useEffect(() => {
-    if (selectedGroup && !groupPosts.find((post) => post.id === selectedPostId)) {
-      setSelectedPostId(groupPosts[0]?.id ?? "");
+  const handleComposerSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedGroup) return;
+
+    if (activeReplyPost) {
+      const text = commentText.trim();
+      if (!text || activeReplyPost.isLocked) return;
+      await api(`/api/posts/${activeReplyPost.id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ text })
+      });
+      setCommentText("");
+      await refresh();
+      return;
     }
-  }, [groupPosts, selectedGroup, selectedPostId]);
+
+    const text = postText.trim();
+    if (!text) return;
+    await api("/api/posts", {
+      method: "POST",
+      body: JSON.stringify({
+        groupId: selectedGroup.id,
+        text,
+        imageUrl: postImage,
+        type: "sale"
+      })
+    });
+    setPostText("");
+    setPostImage("");
+    setUploadName("");
+    await refresh();
+  };
 
   if (loading) {
-    return <div className="min-h-[100dvh] flex items-center justify-center">טוען</div>;
+    return <div className="flex min-h-[100dvh] items-center justify-center">Loading</div>;
   }
 
   if (!currentUser) {
@@ -301,14 +374,14 @@ export default function CommunityApp() {
               onClick={() => setAuthMode("login")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "login" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              כניסה
+              Login
             </button>
             <button
               type="button"
               onClick={() => setAuthMode("register")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "register" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              הרשמה
+              Register
             </button>
           </div>
 
@@ -319,17 +392,17 @@ export default function CommunityApp() {
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="אימייל"
+                placeholder="Email"
               />
               <input
                 value={loginForm.password}
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="סיסמה"
+                placeholder="Password"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                כניסה
+                Login
               </button>
             </form>
           ) : (
@@ -339,24 +412,24 @@ export default function CommunityApp() {
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
                 type="text"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="שם"
+                placeholder="Name"
               />
               <input
                 value={registerForm.email}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="אימייל"
+                placeholder="Email"
               />
               <input
                 value={registerForm.password}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="סיסמה"
+                placeholder="Password"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                הרשמה
+                Register
               </button>
             </form>
           )}
@@ -368,41 +441,47 @@ export default function CommunityApp() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background">
-      <header className="sticky top-0 z-30 border-b border-white/60 bg-white/90 px-4 py-4 shadow-sm">
+    <div className="flex min-h-[100dvh] flex-col bg-background">
+      <header className="sticky top-0 z-30 border-b border-white/60 bg-white/90 px-4 py-4 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="flex items-center gap-3">
-            {view === "group" ? (
+            {view === "groups" ? (
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-soft text-primary-dark">
+                <Store className="h-6 w-6" />
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={() => setView("groups")}
+                onClick={() => {
+                  if (view === "create") {
+                    setView("join");
+                  } else {
+                    setView("groups");
+                  }
+                }}
                 className="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-soft text-text"
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-            ) : (
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-soft text-primary-dark">
-                <Store className="h-6 w-6" />
-              </div>
             )}
             <div className="text-2xl font-black tracking-tight text-primary">SIZ</div>
           </div>
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => setView("profile")}
             className="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-soft text-text"
           >
-            <Plus className="h-5 w-5 rotate-45" />
+            <UserRound className="h-5 w-5" />
           </button>
         </div>
       </header>
 
-      <main className="mx-auto flex min-h-[calc(100dvh-72px)] max-w-5xl flex-col px-4 pb-4 pt-4">
+      <main className="mx-auto flex min-h-0 flex-1 max-w-5xl flex-col px-4 py-4">
         {!hasSeenIntro ? (
           <ShellCard className="mb-4 p-4 text-right">
-            <div className="mb-2 text-lg font-bold text-text">ברוכים הבאים ל-SIZ</div>
-            <div className="text-sm leading-6 text-text-muted">
-              כאן רואים רק את הקבוצות שלך. טפח על + כדי להצטרף לקבוצה חדשה, או בחר קבוצה כדי לראות את השיח והפוסטים שלה.
+            <div className="text-lg font-bold text-text">Welcome to SIZ</div>
+            <div className="mt-2 text-sm leading-6 text-text-muted">
+              Tap + to join groups. Open a group to publish posts, comment on threads, and message people from your profile.
             </div>
             <button
               type="button"
@@ -414,7 +493,7 @@ export default function CommunityApp() {
               }}
               className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
             >
-              הבנתי
+              Got it
             </button>
           </ShellCard>
         ) : null}
@@ -422,7 +501,7 @@ export default function CommunityApp() {
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-lg font-bold text-text">הקבוצות שלך</div>
+              <div className="text-lg font-bold text-text">My groups</div>
               <button
                 type="button"
                 onClick={() => setView("join")}
@@ -438,6 +517,11 @@ export default function CommunityApp() {
                   type="button"
                   onClick={() => {
                     setSelectedGroupId(group.id);
+                    setReplyTargetPostId("");
+                    setCommentText("");
+                    setPostText("");
+                    setPostImage("");
+                    setUploadName("");
                     setView("group");
                   }}
                   className="w-full rounded-2xl bg-white p-4 text-right shadow-card"
@@ -450,7 +534,7 @@ export default function CommunityApp() {
               ))}
               {!joinedGroups.length ? (
                 <ShellCard className="p-4 text-right">
-                  <div className="text-lg font-bold text-text">אין קבוצות</div>
+                  <div className="text-lg font-bold text-text">No groups yet</div>
                 </ShellCard>
               ) : null}
             </div>
@@ -460,7 +544,15 @@ export default function CommunityApp() {
         {view === "join" ? (
           <div className="flex-1 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-lg font-bold text-text">כל הקבוצות</div>
+              <button
+                type="button"
+                onClick={() => setView("groups")}
+                className="flex items-center gap-2 rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </button>
+              <div className="text-lg font-bold text-text">All groups</div>
               <button
                 type="button"
                 onClick={() => setView("create")}
@@ -469,45 +561,47 @@ export default function CommunityApp() {
                 <Plus className="h-5 w-5" />
               </button>
             </div>
-            {availableGroups.map((group) => (
-              <div key={group.id} className="rounded-2xl bg-white p-4 shadow-card">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-text">{group.name}</div>
+            <div className="space-y-3">
+              {availableGroups.map((group) => (
+                <div key={group.id} className="rounded-2xl bg-white p-4 shadow-card">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-text">{group.name}</div>
+                      {group.isLocked ? <div className="mt-1 text-xs text-text-muted">Locked group</div> : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleJoinGroup(group.id)}
+                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Join
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleJoinGroup(group.id)}
-                    className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    {group.isLocked ? "לבקש להצטרף" : "הצטרף"}
-                  </button>
                 </div>
-              </div>
-            ))}
+              ))}
+              {!availableGroups.length ? (
+                <ShellCard className="p-4 text-right">
+                  <div className="text-lg font-bold text-text">No more groups</div>
+                </ShellCard>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
         {view === "create" ? (
           <form className="flex-1 space-y-3 rounded-2xl bg-white p-4 shadow-card" onSubmit={handleCreateGroup}>
-            <div className="text-lg font-bold text-text">קבוצה חדשה</div>
+            <div className="text-lg font-bold text-text">Create group</div>
             <input
               value={newGroup.name}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, name: event.target.value }))}
               className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="שם הקבוצה"
-            />
-            <input
-              value={newGroup.category}
-              onChange={(event) => setNewGroup((prev) => ({ ...prev, category: event.target.value }))}
-              className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="קטגוריה"
+              placeholder="Group name"
             />
             <textarea
               value={newGroup.description}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, description: event.target.value }))}
               className="min-h-28 w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="תיאור"
+              placeholder="Description"
             />
             <label className="flex items-center gap-2 text-sm text-text">
               <input
@@ -515,36 +609,138 @@ export default function CommunityApp() {
                 checked={newGroup.isLocked}
                 onChange={(event) => setNewGroup((prev) => ({ ...prev, isLocked: event.target.checked }))}
               />
-              נעולה, אישור נדרש כדי להצטרף
+              Locked group
             </label>
             <button type="submit" className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white">
-              צור
+              Create
             </button>
           </form>
         ) : null}
 
+        {view === "profile" ? (
+          <div className="flex-1 space-y-3">
+            <ShellCard className="p-4 text-right">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-lg font-bold text-text">{currentUser.username}</div>
+                  <div className="mt-1 text-sm text-text-muted">{currentUser.email}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text"
+                >
+                  Logout
+                </button>
+              </div>
+            </ShellCard>
+
+            <ShellCard className="p-4 text-right">
+              <div className="mb-3 text-lg font-bold text-text">Notifications</div>
+              <div className="space-y-2">
+                {recentNotifications.map((message) => {
+                  const sender = userById(message.senderId);
+                  return (
+                    <div key={message.id} className="rounded-2xl bg-surface-soft px-3 py-2">
+                      <div className="text-sm font-semibold text-text">{sender?.username ?? "Message"}</div>
+                      <div className="text-sm text-text-muted">{message.text}</div>
+                    </div>
+                  );
+                })}
+                {!recentNotifications.length ? <div className="text-sm text-text-muted">No notifications</div> : null}
+              </div>
+            </ShellCard>
+
+            <ShellCard className="p-4 text-right">
+              <div className="mb-3 text-lg font-bold text-text">Private messages</div>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {messagePartners.map((partner) => (
+                    <button
+                      key={partner.id}
+                      type="button"
+                      onClick={() => setSelectedPartnerId(partner.id)}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                        selectedPartner?.id === partner.id ? "bg-primary text-white" : "bg-surface-soft text-text"
+                      }`}
+                    >
+                      {partner.username}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl bg-surface-soft p-3">
+                  <div className="mb-3 max-h-72 space-y-2 overflow-y-auto">
+                    {currentConversation.length ? (
+                      currentConversation.map((message) => {
+                        const mine = message.senderId === currentUser.id;
+                        return (
+                          <div
+                            key={message.id}
+                            className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                              mine ? "mr-auto bg-primary text-white" : "ml-auto bg-white text-text"
+                            }`}
+                          >
+                            <div>{message.text}</div>
+                            <div className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-text-muted"}`}>
+                              {timeLabel(message.createdAt)}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-sm text-text-muted">Select a person to start a chat.</div>
+                    )}
+                  </div>
+                  <form onSubmit={handleSendMessage} className="space-y-2">
+                    <textarea
+                      value={messageText}
+                      onChange={(event) => setMessageText(event.target.value)}
+                      className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
+                      placeholder="Write a private message"
+                    />
+                    <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 font-semibold text-white">
+                      <Send className="h-4 w-4" />
+                      Send
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+
         {view === "group" && selectedGroup ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-lg font-bold text-text">{selectedGroup.name}</div>
-              {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" /> : null}
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="text-lg font-bold text-text">{selectedGroup.name}</div>
+                {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" /> : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleLeaveGroup(selectedGroup.id)}
+                className="rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text"
+              >
+                Leave
+              </button>
             </div>
 
-            {currentUser?.id === selectedGroup.adminId ? (
+            {canManageGroup ? (
               <ShellCard className="mb-3 p-4 text-right">
-                <div className="text-sm font-semibold text-text">בקשות להצטרפות</div>
+                <div className="text-sm font-semibold text-text">Join requests</div>
                 <div className="mt-3 space-y-2">
                   {data.joinRequests.filter((request) => request.groupId === selectedGroup.id).map((request) => {
                     const applicant = userById(request.userId);
                     return (
                       <div key={request.id} className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2">
-                        <div className="text-sm text-text">{applicant?.username ?? "משתמש"}</div>
+                        <div className="text-sm text-text">{applicant?.username ?? "User"}</div>
                         <button
                           type="button"
                           onClick={() => handleApproveJoin(selectedGroup.id, request.userId)}
                           className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white"
                         >
-                          אשר
+                          Approve
                         </button>
                       </div>
                     );
@@ -553,88 +749,152 @@ export default function CommunityApp() {
               </ShellCard>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pb-4">
-              {groupPosts.map((post) => {
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-4">
+              {groupPosts.map((post: Post) => {
                 const author = userById(post.userId);
-                const comments = data.comments.filter((comment) => comment.postId === post.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+                const comments = data.comments
+                  .filter((comment) => comment.postId === post.id)
+                  .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+                const canManagePost = currentUser?.id === post.userId || canManageGroup;
                 return (
                   <article key={post.id} className="rounded-2xl bg-white p-4 shadow-card">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="text-sm font-semibold text-text">{author?.username ?? ""}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-semibold text-text">{author?.username ?? "User"}</div>
+                      {post.isLocked ? (
+                        <span className="rounded-full bg-surface-soft px-2 py-1 text-[11px] font-semibold text-text-muted">
+                          Locked
+                        </span>
+                      ) : null}
                     </div>
-                    <div className="text-right text-sm leading-6 text-text">{post.text}</div>
+
+                    <div className="mt-3 text-right text-sm leading-6 text-text">{post.text}</div>
                     {post.imageUrl ? (
                       <div className="mt-3 overflow-hidden rounded-2xl">
                         <img src={post.imageUrl} alt="" className="h-auto w-full object-cover" />
                       </div>
                     ) : null}
 
+                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-surface-soft pt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyTargetPostId(post.id);
+                          setCommentText("");
+                        }}
+                        disabled={post.isLocked}
+                        className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold ${
+                          post.isLocked ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
+                        }`}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Comment
+                      </button>
+
+                      {canManagePost ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePostLock(post.id, !post.isLocked)}
+                            className="rounded-full bg-surface-soft px-3 py-2 text-sm font-semibold text-text"
+                          >
+                            {post.isLocked ? "Unlock" : "Lock"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePost(post.id)}
+                            className="rounded-full bg-red-50 px-3 py-2 text-sm font-semibold text-danger"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+
                     <div className="mt-4 space-y-2 border-t border-surface-soft pt-3">
                       {comments.map((comment) => {
                         const commenter = userById(comment.userId);
                         return (
                           <div key={comment.id} className="rounded-2xl bg-surface-soft px-3 py-2 text-right">
-                            <div className="text-xs font-semibold text-text">{commenter?.username ?? ""}</div>
+                            <div className="text-xs font-semibold text-text">{commenter?.username ?? "User"}</div>
                             <div className="text-sm text-text">{comment.text}</div>
                           </div>
                         );
                       })}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPostId(post.id)}
-                      className="mt-3 text-left text-xs text-text-muted"
-                    >
-                      {selectedPostId === post.id ? "הצ׳אט פתוח" : "הגב"}
-                    </button>
                   </article>
                 );
               })}
             </div>
 
-            <form onSubmit={handlePost} className="sticky bottom-0 mt-3 rounded-2xl bg-white p-4 shadow-card">
-              <textarea
-                value={postText}
-                onChange={(event) => setPostText(event.target.value)}
-                className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                placeholder="כתוב"
-              />
-              {postImage ? (
-                <div className="mt-3 overflow-hidden rounded-2xl">
-                  <img src={postImage} alt="" className="h-auto w-full object-cover" />
+            <form onSubmit={handleComposerSubmit} className="sticky bottom-0 rounded-2xl bg-white p-4 shadow-card">
+              {activeReplyPost ? (
+                <div className="mb-3 flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2 text-sm text-text">
+                  <div className="truncate">
+                    Replying to {activeReplyAuthor?.username ?? "thread"}
+                    {activeReplyPost.isLocked ? " · locked" : ""}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyTargetPostId("");
+                      setCommentText("");
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               ) : null}
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text">
-                  <Upload className="h-4 w-4" />
-                  <span>{uploadName || "תמונה"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => handleImageInput(event.target.files?.[0] ?? null)}
-                  />
-                </label>
-                <button type="submit" className="rounded-full bg-primary px-5 py-3 font-semibold text-white">
-                  פרסם
-                </button>
-              </div>
-            </form>
 
-            {selectedPost ? (
-              <form onSubmit={handleComment} className="sticky bottom-[140px] mt-3 rounded-2xl bg-white p-4 shadow-card">
-                <div className="mb-2 text-sm font-semibold text-text">תגובות</div>
-                <textarea
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                  placeholder="תגובה"
-                />
-                <button type="submit" className="mt-3 rounded-full bg-primary px-5 py-3 font-semibold text-white">
-                  שלח תגובה
-                </button>
-              </form>
-            ) : null}
+              <textarea
+                value={activeReplyPost ? commentText : postText}
+                onChange={(event) => {
+                  if (activeReplyPost) {
+                    setCommentText(event.target.value);
+                  } else {
+                    setPostText(event.target.value);
+                  }
+                }}
+                className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
+                placeholder={activeReplyPost ? "Write a comment" : "Write a post"}
+                disabled={Boolean(activeReplyPost?.isLocked)}
+              />
+
+              {!activeReplyPost ? (
+                <div className="mt-3 space-y-3">
+                  {postImage ? (
+                    <div className="overflow-hidden rounded-2xl">
+                      <img src={postImage} alt="" className="h-auto w-full object-cover" />
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text">
+                      <Upload className="h-4 w-4" />
+                      <span>{uploadName || "Image"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => handleImageInput(event.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <button type="submit" className="rounded-full bg-primary px-5 py-3 font-semibold text-white">
+                      Publish
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center justify-end">
+                  <button
+                    type="submit"
+                    className="rounded-full bg-primary px-5 py-3 font-semibold text-white"
+                    disabled={Boolean(activeReplyPost?.isLocked)}
+                  >
+                    Comment
+                  </button>
+                </div>
+              )}
+            </form>
           </div>
         ) : null}
       </main>
