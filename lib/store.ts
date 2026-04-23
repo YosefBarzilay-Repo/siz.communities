@@ -214,7 +214,7 @@ export const createUser = async (input: {
     joinedGroupIds: [],
     isLocked: false,
     isDisabled: false,
-    bio: input.bio?.trim() || "חבר קהילה חדש ב-SIZ",
+    bio: input.bio?.trim() || "Community member on SIZ",
     createdAt: new Date().toISOString()
   };
 

@@ -10,12 +10,12 @@ export async function POST(request: NextRequest) {
   const password = String(body.password ?? "");
 
   if (!email || !password) {
-    return NextResponse.json({ error: "יש למלא אימייל וסיסמה" }, { status: 400 });
+    return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
   }
 
   const user = await verifyUser(email, password);
   if (!user) {
-    return NextResponse.json({ error: "הפרטים אינם נכונים" }, { status: 401 });
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
   const token = await signAuthToken(user.id);

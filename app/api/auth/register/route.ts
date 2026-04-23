@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createUser } from "@/lib/store";
 import { signAuthToken, tokenName } from "@/lib/auth";
+import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
 
@@ -11,12 +12,14 @@ export async function POST(request: NextRequest) {
   const password = String(body.password ?? "");
 
   if (username.length < 2 || !email.includes("@") || password.length < 6) {
-    return NextResponse.json({ error: "נתונים לא תקינים" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
   try {
     const user = await createUser({ username, email, password, bio: String(body.bio ?? "") });
     const token = await signAuthToken(user.id);
+    broadcastUpdate("store:update", { kind: "user-created", userId: user.id });
+
     const response = NextResponse.json({
       user: { id: user.id, username: user.username, email: user.email },
       token
@@ -32,6 +35,6 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch {
-    return NextResponse.json({ error: "האימייל כבר קיים" }, { status: 409 });
+    return NextResponse.json({ error: "Email already exists" }, { status: 409 });
   }
 }

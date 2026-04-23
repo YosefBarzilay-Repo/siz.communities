@@ -60,7 +60,7 @@ const api = async <T,>(url: string, init?: RequestInit): Promise<T> => {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || "׳©׳’׳™׳׳”");
+    throw new Error(payload.error || "An error occurred");
   }
 
   return payload as T;
@@ -165,21 +165,9 @@ export default function CommunityApp() {
     () => data.groups.filter((group) => group.adminId === currentUser?.id),
     [data.groups, currentUser?.id]
   );
-  const adminUserIds = useMemo(() => {
-    const ids = new Set<string>();
-    adminGroups.forEach((group) => {
-      group.memberIds.forEach((id) => {
-        if (id !== currentUser?.id) ids.add(id);
-      });
-      group.pendingMemberIds.forEach((id) => {
-        if (id !== currentUser?.id) ids.add(id);
-      });
-    });
-    return ids;
-  }, [adminGroups]);
   const adminUsers = useMemo(
-    () => [...adminUserIds].map((id) => userById(id)).filter(Boolean) as PublicUser[],
-    [adminUserIds, data.users]
+    () => data.users.filter((user) => user.id !== currentUser?.id),
+    [data.users, currentUser?.id]
   );
   const adminPosts = useMemo(
     () =>
@@ -538,14 +526,14 @@ export default function CommunityApp() {
               onClick={() => setAuthMode("login")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "login" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              ׳›׳ ׳™׳¡׳”
+              Login
             </button>
             <button
               type="button"
               onClick={() => setAuthMode("register")}
               className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${authMode === "register" ? "bg-white text-primary shadow-sm" : "text-text-muted"}`}
             >
-              ׳”׳¨׳©׳׳”
+              Register
             </button>
           </div>
 
@@ -556,17 +544,17 @@ export default function CommunityApp() {
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="׳׳™׳׳™׳™׳"
+                placeholder="Email"
               />
               <input
                 value={loginForm.password}
                 onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="׳¡׳™׳¡׳׳”"
+                placeholder="Password"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                ׳›׳ ׳™׳¡׳”
+                Login
               </button>
             </form>
           ) : (
@@ -576,24 +564,24 @@ export default function CommunityApp() {
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
                 type="text"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="׳©׳"
+                placeholder="Name"
               />
               <input
                 value={registerForm.email}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
                 type="email"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="׳׳™׳׳™׳™׳"
+                placeholder="Email"
               />
               <input
                 value={registerForm.password}
                 onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
                 type="password"
                 className="w-full rounded-2xl border border-surface-border bg-white px-4 py-4 text-right outline-none transition focus:border-primary"
-                placeholder="׳¡׳™׳¡׳׳”"
+                placeholder="Password"
               />
               <button type="submit" className="w-full rounded-full bg-primary px-4 py-4 font-semibold text-white">
-                ׳”׳¨׳©׳׳”
+                Register
               </button>
             </form>
           )}
@@ -643,9 +631,9 @@ export default function CommunityApp() {
       <main className="flex min-h-0 flex-1 flex-col px-3 py-3">
         {!hasSeenIntro ? (
           <ShellCard className="mb-4 p-4 text-right">
-            <div className="text-lg font-bold text-text">׳‘׳¨׳•׳›׳™׳ ׳”׳‘׳׳™׳ ׳-SIZ</div>
+            <div className="text-lg font-bold text-text">Welcome to SIZ</div>
             <div className="mt-2 text-sm leading-6 text-text-muted">
-              ׳׳—׳¦׳• ׳¢׳ + ׳›׳“׳™ ׳׳”׳¦׳˜׳¨׳£ ׳׳§׳‘׳•׳¦׳•׳×. ׳₪׳×׳—׳• ׳§׳‘׳•׳¦׳” ׳›׳“׳™ ׳׳₪׳¨׳¡׳, ׳׳”׳’׳™׳‘ ׳‘׳©׳¨׳©׳•׳¨׳™׳ ׳•׳׳©׳׳•׳— ׳”׳•׳“׳¢׳•׳× ׳₪׳¨׳˜׳™׳•׳× ׳׳”׳₪׳¨׳•׳₪׳™׳.
+              Create and join community groups, post items, reply to threads, and send private messages.
             </div>
             <button
               type="button"
@@ -657,22 +645,22 @@ export default function CommunityApp() {
               }}
               className="mt-3 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
             >
-              ׳”׳‘׳ ׳×׳™
+              Continue
             </button>
           </ShellCard>
         ) : null}
 
         {isWriteBlockedUser ? (
           <ShellCard className="mb-4 p-4 text-right">
-            <div className="text-lg font-bold text-danger">׳׳¦׳‘ ׳§׳¨׳™׳׳” ׳‘׳׳‘׳“</div>
-            <div className="mt-1 text-sm text-text-muted">׳”׳—׳©׳‘׳•׳ ׳©׳׳›׳ ׳ ׳¢׳•׳, ׳•׳׳›׳ ׳׳₪׳©׳¨ ׳¨׳§ ׳׳¦׳₪׳•׳× ׳‘׳×׳•׳›׳.</div>
+            <div className="text-lg font-bold text-danger">Write access blocked</div>
+            <div className="mt-1 text-sm text-text-muted">Your account is disabled or locked, so you can only browse content.</div>
           </ShellCard>
         ) : null}
 
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
             <div className="flex items-center justify-between">
-                <div className="text-lg font-bold text-text">׳”׳§׳‘׳•׳¦׳•׳× ׳©׳׳™</div>
+                <div className="text-lg font-bold text-text">My groups</div>
               <button
                 type="button"
                 onClick={() => setView("join")}
@@ -711,13 +699,13 @@ export default function CommunityApp() {
                       <ShieldCheck className="h-3.5 w-3.5" />
                       {userById(group.adminId)?.username ?? "Admin"}
                     </span>
-                    {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />׳׳™׳©׳•׳¨</span> : null}
+                    {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
                   </div>
                 </button>
               ))}
               {!joinedGroups.length ? (
                 <ShellCard className="p-4 text-right">
-                  <div className="text-lg font-bold text-text">׳׳™׳ ׳§׳‘׳•׳¦׳•׳× ׳¢׳“׳™׳™׳</div>
+                  <div className="text-lg font-bold text-text">No joined groups yet</div>
                 </ShellCard>
               ) : null}
             </div>
@@ -734,7 +722,7 @@ export default function CommunityApp() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <div className="text-lg font-bold text-text">׳›׳ ׳”׳§׳‘׳•׳¦׳•׳×</div>
+              <div className="text-lg font-bold text-text">All groups</div>
               <button
                 type="button"
                 onClick={() => setView("create")}
@@ -754,9 +742,9 @@ export default function CommunityApp() {
                           <ShieldCheck className="h-3.5 w-3.5" />
                           {userById(group.adminId)?.username ?? "Admin"}
                         </span>
-                        {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />אישור</span> : null}
-                        {group.isLocked ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />נעול</span> : null}
-                        {group.isDisabled ? <span className="inline-flex items-center gap-1"><Ban className="h-3.5 w-3.5" />מושבת</span> : null}
+                        {group.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
+                        {group.isLocked ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Locked</span> : null}
+                        {group.isDisabled ? <span className="inline-flex items-center gap-1"><Ban className="h-3.5 w-3.5" />Disabled</span> : null}
                       </div>
                     </div>
                     <button
@@ -773,7 +761,7 @@ export default function CommunityApp() {
               ))}
               {!availableGroups.length ? (
                 <ShellCard className="p-4 text-right">
-                  <div className="text-lg font-bold text-text">׳׳™׳ ׳¢׳•׳“ ׳§׳‘׳•׳¦׳•׳×</div>
+                  <div className="text-lg font-bold text-text">No more groups</div>
                 </ShellCard>
               ) : null}
             </div>
@@ -782,18 +770,18 @@ export default function CommunityApp() {
 
         {view === "create" ? (
           <form className="flex-1 space-y-3 rounded-2xl bg-white p-4 shadow-card" onSubmit={handleCreateGroup}>
-            <div className="text-lg font-bold text-text">׳™׳¦׳™׳¨׳× ׳§׳‘׳•׳¦׳”</div>
+            <div className="text-lg font-bold text-text">Create group</div>
             <input
               value={newGroup.name}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, name: event.target.value }))}
               className="w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="׳©׳ ׳”׳§׳‘׳•׳¦׳”"
+              placeholder="Group name"
             />
             <textarea
               value={newGroup.description}
               onChange={(event) => setNewGroup((prev) => ({ ...prev, description: event.target.value }))}
               className="min-h-28 w-full rounded-2xl border border-surface-border px-4 py-3 text-right outline-none focus:border-primary"
-              placeholder="׳×׳™׳׳•׳¨"
+              placeholder="Description"
             />
             <label className="flex items-center gap-2 text-sm text-text">
               <input
@@ -801,10 +789,10 @@ export default function CommunityApp() {
                 checked={newGroup.requiresApproval}
                 onChange={(event) => setNewGroup((prev) => ({ ...prev, requiresApproval: event.target.checked }))}
               />
-              ׳“׳¨׳•׳© ׳׳™׳©׳•׳¨ ׳׳”׳¦׳˜׳¨׳₪׳•׳×
+              Requires approval to join
             </label>
             <button type="submit" className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={isWriteBlockedUser}>
-              ׳™׳¦׳™׳¨׳”
+              Create
             </button>
           </form>
         ) : null}
@@ -821,9 +809,9 @@ export default function CommunityApp() {
                   type="button"
                   onClick={() =>
                     askConfirm({
-                      title: "׳”׳×׳ ׳×׳§׳•׳×",
-                      description: "׳׳”׳×׳ ׳×׳§ ׳׳”׳—׳©׳‘׳•׳?",
-                      confirmLabel: "׳”׳×׳ ׳×׳§",
+                      title: "Log out",
+                      description: "Sign out of this account?",
+                      confirmLabel: "Log out",
                       onConfirm: handleLogout
                     })
                   }
@@ -835,7 +823,7 @@ export default function CommunityApp() {
             </ShellCard>
 
             <ShellCard className="p-4 text-right">
-              <div className="mb-3 text-lg font-bold text-text">׳”׳×׳¨׳׳•׳×</div>
+              <div className="mb-3 text-lg font-bold text-text">Notifications</div>
               <div className="space-y-2">
                 {recentNotifications.map((message) => {
                   const sender = userById(message.senderId);
@@ -846,19 +834,19 @@ export default function CommunityApp() {
                       onClick={() => openPrivateMessage(message.senderId)}
                       className="w-full rounded-2xl bg-surface-soft px-3 py-2 text-right"
                     >
-                      <div className="text-sm font-semibold text-text">{sender?.username ?? "׳”׳•׳“׳¢׳”"}</div>
+                      <div className="text-sm font-semibold text-text">{sender?.username ?? "User"}</div>
                       <div className="text-sm text-text-muted">{message.text}</div>
                     </button>
                   );
                 })}
-                {!recentNotifications.length ? <div className="text-sm text-text-muted">׳׳™׳ ׳”׳×׳¨׳׳•׳×</div> : null}
+                {!recentNotifications.length ? <div className="text-sm text-text-muted">No notifications</div> : null}
               </div>
             </ShellCard>
 
             <ShellCard className="p-4 text-right">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-lg font-bold text-text">׳”׳•׳“׳¢׳•׳× ׳₪׳¨׳˜׳™׳•׳×</div>
-                <div className="text-xs text-text-muted">׳׳—׳¦׳• ׳¢׳ ׳©׳ ׳›׳“׳™ ׳׳₪׳×׳•׳— ׳¦'׳׳˜</div>
+                <div className="text-lg font-bold text-text">Private messages</div>
+                <div className="text-xs text-text-muted">Tap a name to open a chat</div>
               </div>
               <div className="mb-3">
                 <div className="mb-2 text-xs font-semibold text-text-muted">Members</div>
@@ -875,7 +863,7 @@ export default function CommunityApp() {
                       {partner.username}
                     </button>
                   ))}
-                  {!groupContacts.length ? <div className="text-sm text-text-muted">׳”׳¦׳˜׳¨׳₪׳• ׳׳§׳‘׳•׳¦׳” ׳›׳“׳™ ׳׳¨׳׳•׳× ׳—׳‘׳¨׳™׳</div> : null}
+                  {!groupContacts.length ? <div className="text-sm text-text-muted">Join a group to find people</div> : null}
                 </div>
               </div>
               <div className="mb-3 flex flex-wrap gap-2">
@@ -891,7 +879,7 @@ export default function CommunityApp() {
                     {partner.username}
                   </button>
                   ))}
-                {!messagePartners.length ? <div className="text-sm text-text-muted">׳׳™׳ ׳¦'׳׳˜׳™׳ ׳¢׳“׳™׳™׳</div> : null}
+                {!messagePartners.length ? <div className="text-sm text-text-muted">No chats yet</div> : null}
               </div>
 
               <div className="rounded-2xl bg-surface-soft p-3">
@@ -918,7 +906,7 @@ export default function CommunityApp() {
                       );
                     })
                   ) : (
-                    <div className="text-sm text-text-muted">׳‘׳—׳¨׳• ׳׳“׳ ׳›׳“׳™ ׳׳”׳×׳—׳™׳ ׳¦'׳׳˜</div>
+                    <div className="text-sm text-text-muted">Choose a person to start chatting</div>
                   )}
                 </div>
                 <form onSubmit={handleSendMessage} className="space-y-2">
@@ -926,7 +914,7 @@ export default function CommunityApp() {
                     value={messageText}
                     onChange={(event) => setMessageText(event.target.value)}
                     className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                    placeholder={selectedPartner ? `׳”׳•׳“׳¢׳” ׳׳ ${selectedPartner.username}` : "׳‘׳—׳¨׳• ׳׳©׳×׳׳© ׳§׳•׳“׳"}
+                    placeholder={selectedPartner ? `Message ${selectedPartner.username}` : "Choose a person first"}
                     disabled={!selectedPartner}
                   />
                   <button
@@ -941,13 +929,13 @@ export default function CommunityApp() {
               </div>
             </ShellCard>
 
-            {adminGroups.length ? (
+            {data.groups.length ? (
               <ShellCard className="p-4 text-right">
                 <div className="mb-3 text-lg font-bold text-text">Admin panel</div>
                 <div className="space-y-4">
                   <div className="space-y-3">
                     <div className="text-sm font-semibold text-text">Groups</div>
-                    {adminGroups.map((group) => (
+                    {data.groups.map((group) => (
                       <div key={group.id} className="rounded-2xl bg-surface-soft p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -957,10 +945,11 @@ export default function CommunityApp() {
                               {userById(group.adminId)?.username ?? "Admin"}
                             </div>
                             <div className="text-xs text-text-muted">
-                              {group.requiresApproval ? "׳“׳•׳¨׳© ׳׳™׳©׳•׳¨" : "׳§׳‘׳•׳¦׳” ׳₪׳×׳•׳—׳”"}
-                              {group.isLocked ? " ֲ· ׳ ׳¢׳•׳" : ""}
+                              {group.requiresApproval ? "Approval required" : "Open group"}
+                              {group.isLocked ? " · Locked" : ""}
                             </div>
                           </div>
+                        {group.adminId === currentUser?.id ? (
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -1008,7 +997,11 @@ export default function CommunityApp() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
+                        ) : (
+                          <div className="text-xs text-text-muted">Read only</div>
+                        )}
                         </div>
+                        {group.adminId === currentUser?.id ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {group.pendingMemberIds.map((userId) => {
                             const pendingUser = userById(userId);
@@ -1037,17 +1030,18 @@ export default function CommunityApp() {
                             );
                           })}
                         </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
 
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold text-text">׳׳©׳×׳׳©׳™׳</div>
+                    <div className="text-sm font-semibold text-text">Users</div>
                     {adminUsers.map((user) => (
                       <div key={user.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-soft px-3 py-2">
                         <button type="button" onClick={() => openPrivateMessage(user.id)} className="text-right">
                           <div className="font-semibold text-text">{user.username}</div>
-                            <div className="text-xs text-text-muted">{user.isDisabled ? "׳׳•׳©׳‘׳×" : user.isLocked ? "׳ ׳¢׳•׳" : "׳₪׳¢׳™׳"}</div>
+                            <div className="text-xs text-text-muted">{user.isDisabled ? "Disabled" : user.isLocked ? "Locked" : "Active"}</div>
                         </button>
                         <div className="flex gap-2">
                           <button
@@ -1101,7 +1095,7 @@ export default function CommunityApp() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold text-text">׳©׳¨׳©׳•׳¨׳™׳</div>
+                    <div className="text-sm font-semibold text-text">Threads</div>
                     {adminPosts.map((post) => {
                       const postGroup = data.groups.find((group) => group.id === post.groupId);
                       const author = userById(post.userId);
@@ -1250,7 +1244,7 @@ export default function CommunityApp() {
                 <ShieldCheck className="h-3.5 w-3.5" />
                 {selectedGroupAdmin?.username ?? "Admin"}
               </span>
-              {selectedGroup.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />׳׳™׳©׳•׳¨ ׳ ׳“׳¨׳©</span> : null}
+              {selectedGroup.requiresApproval ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />Approval required</span> : null}
             </div>
 
             {canManageGroup && data.joinRequests.some((request) => request.groupId === selectedGroup.id) ? (
@@ -1395,8 +1389,8 @@ export default function CommunityApp() {
                 <div className="mb-3 flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2 text-sm text-text">
                   <div className="truncate">
                     Replying to {activeReplyAuthor?.username ?? "thread"}
-                    {activeReplyPost.isLocked ? " ֲ· ׳ ׳¢׳•׳" : ""}
-                </div>
+                    {activeReplyPost.isLocked ? " · Locked" : ""}
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1420,7 +1414,7 @@ export default function CommunityApp() {
                   }
                 }}
                 className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                placeholder={activeReplyPost ? "׳›׳×׳‘׳• ׳×׳’׳•׳‘׳”" : "׳›׳×׳‘׳• ׳₪׳¨׳¡׳•׳"}
+                placeholder={activeReplyPost ? "Write a reply" : "Write a post"}
                 disabled={Boolean(activeReplyPost?.isLocked || activeReplyPost?.isDisabled || !canWriteInSelectedGroup)}
               />
 
@@ -1464,8 +1458,8 @@ export default function CommunityApp() {
 
         {view === "group" && selectedGroup && !canAccessSelectedGroup ? (
           <ShellCard className="p-4 text-right">
-            <div className="text-lg font-bold text-text">׳’׳™׳©׳” ׳׳•׳’׳‘׳׳×</div>
-            <div className="mt-1 text-sm text-text-muted">׳”׳§׳‘׳•׳¦׳” ׳ ׳¢׳•׳׳” ׳׳• ׳©׳׳×׳ ׳׳׳×׳™׳ ׳™׳ ׳׳׳™׳©׳•׳¨ ׳׳”׳¦׳˜׳¨׳₪׳•׳×.</div>
+            <div className="text-lg font-bold text-text">Access denied</div>
+            <div className="mt-1 text-sm text-text-muted">This group is locked or you do not have permission to access it.</div>
           </ShellCard>
         ) : null}
       </main>

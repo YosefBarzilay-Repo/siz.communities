@@ -18,18 +18,18 @@ const createUser = (username: string, email: string, password: string, bio: stri
 });
 
 const users: User[] = [
-  createUser("נועה לוי", "noa@siz.local", "123456", "משפצת בתים, מוסרת ומוכרת במהירות."),
-  createUser("מיכל כהן", "michal@siz.local", "123456", "מתנדבת שכונתית, אוהבת להעביר הלאה."),
-  createUser("דן ברק", "dan@siz.local", "123456", "סטודנט, מחפש ריהוט זול ונגיש."),
-  createUser("יעל סיני", "yael@siz.local", "123456", "רכזת קהילה באגודת הבניין.")
+  createUser("Noa Levi", "noa@siz.local", "123456", "Community organizer and fast responder."),
+  createUser("Michal Cohen", "michal@siz.local", "123456", "Neighborhood volunteer who likes to help."),
+  createUser("Dan Barak", "dan@siz.local", "123456", "Student, gadget hunter, and casual seller."),
+  createUser("Yael Sini", "yael@siz.local", "123456", "Local organizer for building updates.")
 ];
 
 const groups: Group[] = [
   {
     id: randomUUID(),
-    name: "קהילת רחובות",
-    category: "שכונה",
-    description: "לוח הקהילה של הבניינים, המעברים והיד השנייה בשכונה.",
+    name: "Neighborhood Exchange",
+    category: "Housing",
+    description: "The neighborhood board for buildings, moving, and shared updates.",
     adminId: users[0].id,
     memberIds: [users[0].id, users[1].id, users[2].id],
     isLocked: false,
@@ -40,9 +40,9 @@ const groups: Group[] = [
   },
   {
     id: randomUUID(),
-    name: "סטודנטים במרכז",
-    category: "סטודנטים",
-    description: "ריהוט, ספרים, מטבחונים וכל מה שזז בין חדרי מעונות.",
+    name: "Students in the Center",
+    category: "Students",
+    description: "Rentals, books, exams, and everything buzzing between classes.",
     adminId: users[2].id,
     memberIds: [users[1].id, users[2].id, users[3].id],
     isLocked: false,
@@ -53,9 +53,9 @@ const groups: Group[] = [
   },
   {
     id: randomUUID(),
-    name: "למסירה: אירועים",
-    category: "אחר",
-    description: "פריטים שנשארו אחרי חתונות, בריתות וכנסים.",
+    name: "Events Under the Stars",
+    category: "Other",
+    description: "Private conversations after events, together with invites and tips.",
     adminId: users[1].id,
     memberIds: [users[0].id, users[1].id, users[3].id],
     isLocked: true,
@@ -76,7 +76,7 @@ const posts: Post[] = [
     id: randomUUID(),
     groupId: groups[0].id,
     userId: users[0].id,
-    text: "שולחן עבודה לבן, מצב מצוין. מתאים ללימודים או לפינת עבודה ביתית. איסוף מהרצל 18.",
+    text: "Solid wood desk for sale. In great condition. Suitable for studying or a home office. Asking 18.",
     imageUrl: "",
     type: "sale",
     isLocked: false,
@@ -87,7 +87,7 @@ const posts: Post[] = [
     id: randomUUID(),
     groupId: groups[0].id,
     userId: users[1].id,
-    text: "כיסא אוכל לתינוק למסירה. נקי, יציב, ללא צורך בהרכבה.",
+    text: "Free snack box for the neighborhood. Clean, nice, no pickup needed.",
     imageUrl: "",
     type: "giveaway",
     isLocked: false,
@@ -98,7 +98,7 @@ const posts: Post[] = [
     id: randomUUID(),
     groupId: groups[1].id,
     userId: users[2].id,
-    text: "מקרר מיני, עובד מצוין. מחפש קנייה מהירה כי עוברים דירה בסוף השבוע.",
+    text: "Small mini-mart shelf, good condition. Looking for a quick pickup by the end of the week.",
     imageUrl: "",
     type: "sale",
     isLocked: false,
@@ -112,14 +112,14 @@ const comments: Comment[] = [
     id: randomUUID(),
     postId: posts[0].id,
     userId: users[2].id,
-    text: "יש עדיין את השולחן? אפשר להגיע בערב.",
+    text: "Is the desk still available? Can I pick it up tonight?",
     createdAt: daysAgo(1)
   },
   {
     id: randomUUID(),
     postId: posts[0].id,
     userId: users[1].id,
-    text: "כן, שמור עד מחר בבוקר.",
+    text: "Yes, it is reserved until tomorrow morning.",
     createdAt: daysAgo(1)
   }
 ];
