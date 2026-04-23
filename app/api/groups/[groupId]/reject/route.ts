@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { approveJoinRequest, getGroupById } from "@/lib/store";
+import { getGroupById, rejectJoinRequest } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: Params) {
     return NextResponse.json({ error: "Missing user" }, { status: 400 });
   }
 
-  const updated = await approveJoinRequest(groupId, userId);
-  broadcastUpdate("store:update", { kind: "group-approved", groupId, userId });
+  const updated = await rejectJoinRequest(groupId, userId);
+  broadcastUpdate("store:update", { kind: "group-rejected", groupId, userId });
   return NextResponse.json({ group: updated });
 }

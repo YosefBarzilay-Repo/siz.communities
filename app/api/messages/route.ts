@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth";
+import { getUserFromRequest, getWritableUserFromRequest } from "@/lib/auth";
 import { conversationPartners, conversationWith, getUserById, sendMessage } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getUserFromRequest(request);
+  const user = await getWritableUserFromRequest(request);
   if (!user) {
-    return NextResponse.json({ error: "נדרש להתחבר" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const body = await request.json();
@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
   const text = String(body.text ?? "").trim();
 
   if (!receiverId || !text) {
-    return NextResponse.json({ error: "נמען ותוכן נדרשים" }, { status: 400 });
+    return NextResponse.json({ error: "Missing recipient or text" }, { status: 400 });
   }
 
   if (!(await getUserById(receiverId))) {
-    return NextResponse.json({ error: "המשתמש לא נמצא" }, { status: 404 });
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
   const message = await sendMessage({

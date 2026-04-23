@@ -8,6 +8,7 @@ export type User = {
   email: string;
   passwordHash: string;
   joinedGroupIds: string[];
+  isLocked: boolean;
   bio: string;
   createdAt: string;
 };
@@ -20,6 +21,7 @@ export type Group = {
   adminId: string;
   memberIds: string[];
   isLocked: boolean;
+  requiresApproval: boolean;
   pendingMemberIds: string[];
   createdAt: string;
 };

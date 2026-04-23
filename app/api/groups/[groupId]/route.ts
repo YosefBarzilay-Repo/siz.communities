@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth";
+import { getWritableUserFromRequest } from "@/lib/auth";
 import { deleteGroup, getGroupById, updateGroup } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
@@ -12,25 +12,27 @@ type Params = {
 };
 
 export async function PATCH(request: NextRequest, context: Params) {
-  const user = await getUserFromRequest(request);
+  const user = await getWritableUserFromRequest(request);
   if (!user) {
-    return NextResponse.json({ error: "נדרש להתחבר" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { groupId } = await context.params;
   const group = await getGroupById(groupId);
   if (!group) {
-    return NextResponse.json({ error: "הקהילה לא נמצאה" }, { status: 404 });
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
   if (group.adminId !== user.id) {
-    return NextResponse.json({ error: "אין הרשאה לערוך קהילה" }, { status: 403 });
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
   const body = await request.json();
   const updated = await updateGroup(groupId, {
     name: body.name,
     category: body.category,
-    description: body.description
+    description: body.description,
+    isLocked: body.isLocked,
+    requiresApproval: body.requiresApproval
   });
 
   broadcastUpdate("store:update", { kind: "group-updated", groupId });
@@ -38,18 +40,18 @@ export async function PATCH(request: NextRequest, context: Params) {
 }
 
 export async function DELETE(request: NextRequest, context: Params) {
-  const user = await getUserFromRequest(request);
+  const user = await getWritableUserFromRequest(request);
   if (!user) {
-    return NextResponse.json({ error: "נדרש להתחבר" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { groupId } = await context.params;
   const group = await getGroupById(groupId);
   if (!group) {
-    return NextResponse.json({ error: "הקהילה לא נמצאה" }, { status: 404 });
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
   if (group.adminId !== user.id) {
-    return NextResponse.json({ error: "אין הרשאה למחוק קהילה" }, { status: 403 });
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
   await deleteGroup(groupId);

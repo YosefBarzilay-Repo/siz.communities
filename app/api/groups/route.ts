@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth";
+import { getWritableUserFromRequest } from "@/lib/auth";
 import { createGroup, getGroups } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
@@ -10,7 +10,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getUserFromRequest(request);
+  const user = await getWritableUserFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
     category,
     description,
     adminId: user.id,
-    isLocked: Boolean(body.isLocked)
+    isLocked: Boolean(body.isLocked),
+    requiresApproval: Boolean(body.requiresApproval)
   });
 
   broadcastUpdate("store:update", { kind: "group-created", groupId: group.id });

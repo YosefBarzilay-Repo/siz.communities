@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth";
+import { getWritableUserFromRequest } from "@/lib/auth";
 import { createPost, getGroupById, getPosts } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
@@ -10,9 +10,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getUserFromRequest(request);
+  const user = await getWritableUserFromRequest(request);
   if (!user) {
-    return NextResponse.json({ error: "נדרש להתחבר" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const body = await request.json();
@@ -22,11 +22,15 @@ export async function POST(request: NextRequest) {
   const imageUrl = String(body.imageUrl ?? "").trim();
 
   if (!groupId || !text) {
-    return NextResponse.json({ error: "יש לבחור קהילה ולהוסיף טקסט" }, { status: 400 });
+    return NextResponse.json({ error: "Missing group or text" }, { status: 400 });
   }
 
-  if (!(await getGroupById(groupId))) {
-    return NextResponse.json({ error: "הקהילה לא נמצאה" }, { status: 404 });
+  const group = await getGroupById(groupId);
+  if (!group) {
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
+  }
+  if (group.isLocked) {
+    return NextResponse.json({ error: "Group is locked" }, { status: 423 });
   }
 
   const post = await createPost({

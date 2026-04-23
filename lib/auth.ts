@@ -53,3 +53,11 @@ export const getUserFromRequest = async (request: NextRequest) => {
     return null;
   }
 };
+
+export const getWritableUserFromRequest = async (request: NextRequest) => {
+  const user = await getUserFromRequest(request);
+  if (!user) return null;
+  const dbUser = await getUserById(user.id);
+  if (dbUser?.isLocked) return null;
+  return user;
+};

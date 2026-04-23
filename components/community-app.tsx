@@ -99,10 +99,11 @@ export default function CommunityApp() {
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ username: "", email: "", password: "" });
-  const [newGroup, setNewGroup] = useState({ name: "", description: "", isLocked: false });
+  const [newGroup, setNewGroup] = useState({ name: "", description: "", requiresApproval: false });
 
   const currentUser = data.currentUser;
   const currentUserDetail = data.currentUserDetail;
+  const isLockedUser = Boolean(currentUserDetail?.isLocked);
 
   const userById = (id: string) => data.users.find((user) => user.id === id);
 
@@ -131,6 +132,33 @@ export default function CommunityApp() {
   const activeReplyPost = replyTargetPostId ? data.posts.find((post) => post.id === replyTargetPostId) ?? null : null;
   const activeReplyAuthor = activeReplyPost ? userById(activeReplyPost.userId) : null;
   const canManageGroup = Boolean(currentUser && selectedGroup && currentUser.id === selectedGroup.adminId);
+  const adminGroups = useMemo(
+    () => data.groups.filter((group) => group.adminId === currentUser?.id),
+    [data.groups, currentUser?.id]
+  );
+  const adminUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    adminGroups.forEach((group) => {
+      group.memberIds.forEach((id) => {
+        if (id !== currentUser?.id) ids.add(id);
+      });
+      group.pendingMemberIds.forEach((id) => {
+        if (id !== currentUser?.id) ids.add(id);
+      });
+    });
+    return ids;
+  }, [adminGroups]);
+  const adminUsers = useMemo(
+    () => [...adminUserIds].map((id) => userById(id)).filter(Boolean) as PublicUser[],
+    [adminUserIds, data.users]
+  );
+  const adminPosts = useMemo(
+    () =>
+      data.posts
+        .filter((post) => adminGroups.some((group) => group.id === post.groupId))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [adminGroups, data.posts]
+  );
 
   const messagePartners = useMemo(() => {
     const partnerIds = new Set<string>();
@@ -141,7 +169,17 @@ export default function CommunityApp() {
     return [...partnerIds].map((id) => userById(id)).filter(Boolean) as PublicUser[];
   }, [data.messages, currentUser?.id, data.users]);
 
-  const selectedPartner = selectedPartnerId ? userById(selectedPartnerId) ?? null : messagePartners[0] ?? null;
+  const groupContacts = useMemo(() => {
+    const ids = new Set<string>();
+    joinedGroups.forEach((group) => {
+      group.memberIds.forEach((id) => {
+        if (id !== currentUser?.id) ids.add(id);
+      });
+    });
+    return [...ids].map((id) => userById(id)).filter(Boolean) as PublicUser[];
+  }, [joinedGroups, currentUser?.id, data.users]);
+
+  const selectedPartner = selectedPartnerId ? userById(selectedPartnerId) ?? null : messagePartners[0] ?? groupContacts[0] ?? null;
   const currentConversation = selectedPartner
     ? data.messages
         .filter((message) =>
@@ -156,6 +194,13 @@ export default function CommunityApp() {
       .filter((message) => message.receiverId === currentUser?.id)
       .slice(0, 5);
   }, [data.messages, currentUser?.id]);
+
+  const openPrivateMessage = (userId: string) => {
+    if (!userId || userId === currentUser?.id) return;
+    setSelectedPartnerId(userId);
+    setMessageText("");
+    setView("profile");
+  };
 
   const refresh = async () => {
     const payload = await api<AppData>("/api/bootstrap");
@@ -267,7 +312,7 @@ export default function CommunityApp() {
       method: "POST",
       body: JSON.stringify(newGroup)
     });
-    setNewGroup({ name: "", description: "", isLocked: false });
+    setNewGroup({ name: "", description: "", requiresApproval: false });
     await refresh();
     setView("groups");
   };
@@ -278,6 +323,31 @@ export default function CommunityApp() {
       body: JSON.stringify({ userId })
     });
     await refresh();
+  };
+
+  const handleRejectJoin = async (groupId: string, userId: string) => {
+    await api(`/api/groups/${groupId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ userId })
+    });
+    await refresh();
+  };
+
+  const handleToggleGroupLock = async (groupId: string, locked: boolean) => {
+    await api(`/api/groups/${groupId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ isLocked: locked })
+    });
+    await refresh();
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    await api(`/api/groups/${groupId}`, { method: "DELETE" });
+    if (selectedGroupId === groupId) {
+      setSelectedGroupId("");
+    }
+    await refresh();
+    setView("groups");
   };
 
   const handleTogglePostLock = async (postId: string, locked: boolean) => {
@@ -296,6 +366,19 @@ export default function CommunityApp() {
       setReplyTargetPostId("");
       setCommentText("");
     }
+    await refresh();
+  };
+
+  const handleToggleUserLock = async (userId: string, locked: boolean) => {
+    await api(`/api/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ locked })
+    });
+    await refresh();
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    await api(`/api/users/${userId}`, { method: "DELETE" });
     await refresh();
   };
 
@@ -323,6 +406,7 @@ export default function CommunityApp() {
   const handleComposerSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedGroup) return;
+    const currentGroupId = selectedGroup.id;
 
     if (activeReplyPost) {
       const text = commentText.trim();
@@ -332,7 +416,10 @@ export default function CommunityApp() {
         body: JSON.stringify({ text })
       });
       setCommentText("");
+      setReplyTargetPostId("");
       await refresh();
+      setSelectedGroupId(currentGroupId);
+      setView("group");
       return;
     }
 
@@ -351,6 +438,8 @@ export default function CommunityApp() {
     setPostImage("");
     setUploadName("");
     await refresh();
+    setSelectedGroupId(currentGroupId);
+    setView("group");
   };
 
   if (loading) {
@@ -498,6 +587,13 @@ export default function CommunityApp() {
           </ShellCard>
         ) : null}
 
+        {isLockedUser ? (
+          <ShellCard className="mb-4 p-4 text-right">
+            <div className="text-lg font-bold text-danger">Read only mode</div>
+            <div className="mt-1 text-sm text-text-muted">Your account is locked, so you can view content but not write.</div>
+          </ShellCard>
+        ) : null}
+
         {view === "groups" ? (
           <div className="flex-1 space-y-3">
             <div className="flex items-center justify-between">
@@ -505,9 +601,11 @@ export default function CommunityApp() {
               <button
                 type="button"
                 onClick={() => setView("join")}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-white shadow-sm"
+                className="flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-white shadow-sm"
+                title="Add group"
               >
                 <Plus className="h-5 w-5" />
+                <span className="text-sm font-semibold">Add</span>
               </button>
             </div>
             <div className="space-y-3">
@@ -528,7 +626,10 @@ export default function CommunityApp() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="text-lg font-bold text-text">{group.name}</div>
-                    {group.isLocked ? <Lock className="h-4 w-4 text-text-muted" /> : null}
+                    <div className="flex items-center gap-2">
+                      {group.requiresApproval ? <span className="rounded-full bg-surface-soft px-2 py-1 text-[11px] font-semibold text-text-muted">Approval</span> : null}
+                      {group.isLocked ? <Lock className="h-4 w-4 text-text-muted" /> : null}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -567,12 +668,16 @@ export default function CommunityApp() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-right">
                       <div className="text-lg font-bold text-text">{group.name}</div>
-                      {group.isLocked ? <div className="mt-1 text-xs text-text-muted">Locked group</div> : null}
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {group.requiresApproval ? <span className="rounded-full bg-surface-soft px-2 py-1 text-[11px] font-semibold text-text-muted">Approval required</span> : null}
+                        {group.isLocked ? <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-danger">Locked</span> : null}
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleJoinGroup(group.id)}
-                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
+                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      disabled={isLockedUser}
                     >
                       Join
                     </button>
@@ -606,12 +711,12 @@ export default function CommunityApp() {
             <label className="flex items-center gap-2 text-sm text-text">
               <input
                 type="checkbox"
-                checked={newGroup.isLocked}
-                onChange={(event) => setNewGroup((prev) => ({ ...prev, isLocked: event.target.checked }))}
+                checked={newGroup.requiresApproval}
+                onChange={(event) => setNewGroup((prev) => ({ ...prev, requiresApproval: event.target.checked }))}
               />
-              Locked group
+              Require approval to join
             </label>
-            <button type="submit" className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white">
+            <button type="submit" className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={isLockedUser}>
               Create
             </button>
           </form>
@@ -641,10 +746,15 @@ export default function CommunityApp() {
                 {recentNotifications.map((message) => {
                   const sender = userById(message.senderId);
                   return (
-                    <div key={message.id} className="rounded-2xl bg-surface-soft px-3 py-2">
+                    <button
+                      type="button"
+                      key={message.id}
+                      onClick={() => openPrivateMessage(message.senderId)}
+                      className="w-full rounded-2xl bg-surface-soft px-3 py-2 text-right"
+                    >
                       <div className="text-sm font-semibold text-text">{sender?.username ?? "Message"}</div>
                       <div className="text-sm text-text-muted">{message.text}</div>
-                    </div>
+                    </button>
                   );
                 })}
                 {!recentNotifications.length ? <div className="text-sm text-text-muted">No notifications</div> : null}
@@ -652,10 +762,14 @@ export default function CommunityApp() {
             </ShellCard>
 
             <ShellCard className="p-4 text-right">
-              <div className="mb-3 text-lg font-bold text-text">Private messages</div>
-              <div className="space-y-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-lg font-bold text-text">Private messages</div>
+                <div className="text-xs text-text-muted">Tap a name to chat</div>
+              </div>
+              <div className="mb-3">
+                <div className="mb-2 text-xs font-semibold text-text-muted">Members</div>
                 <div className="flex flex-wrap gap-2">
-                  {messagePartners.map((partner) => (
+                  {groupContacts.map((partner) => (
                     <button
                       key={partner.id}
                       type="button"
@@ -667,46 +781,199 @@ export default function CommunityApp() {
                       {partner.username}
                     </button>
                   ))}
-                </div>
-
-                <div className="rounded-2xl bg-surface-soft p-3">
-                  <div className="mb-3 max-h-72 space-y-2 overflow-y-auto">
-                    {currentConversation.length ? (
-                      currentConversation.map((message) => {
-                        const mine = message.senderId === currentUser.id;
-                        return (
-                          <div
-                            key={message.id}
-                            className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                              mine ? "mr-auto bg-primary text-white" : "ml-auto bg-white text-text"
-                            }`}
-                          >
-                            <div>{message.text}</div>
-                            <div className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-text-muted"}`}>
-                              {timeLabel(message.createdAt)}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-sm text-text-muted">Select a person to start a chat.</div>
-                    )}
-                  </div>
-                  <form onSubmit={handleSendMessage} className="space-y-2">
-                    <textarea
-                      value={messageText}
-                      onChange={(event) => setMessageText(event.target.value)}
-                      className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
-                      placeholder="Write a private message"
-                    />
-                    <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 font-semibold text-white">
-                      <Send className="h-4 w-4" />
-                      Send
-                    </button>
-                  </form>
+                  {!groupContacts.length ? <div className="text-sm text-text-muted">Join a group to see members</div> : null}
                 </div>
               </div>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {messagePartners.map((partner) => (
+                  <button
+                    key={partner.id}
+                    type="button"
+                    onClick={() => setSelectedPartnerId(partner.id)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                      selectedPartner?.id === partner.id ? "bg-primary text-white" : "bg-surface-soft text-text"
+                    }`}
+                  >
+                    {partner.username}
+                  </button>
+                ))}
+                {!messagePartners.length ? <div className="text-sm text-text-muted">No chats yet</div> : null}
+              </div>
+
+              <div className="rounded-2xl bg-surface-soft p-3">
+                <div className="mb-3 max-h-72 space-y-2 overflow-y-auto">
+                  {currentConversation.length ? (
+                    currentConversation.map((message) => {
+                      const mine = message.senderId === currentUser.id;
+                      const sender = userById(message.senderId);
+                      return (
+                        <button
+                          type="button"
+                          key={message.id}
+                          onClick={() => openPrivateMessage(message.senderId === currentUser.id ? message.receiverId : message.senderId)}
+                          className={`block w-full max-w-[90%] rounded-2xl px-3 py-2 text-right text-sm ${
+                            mine ? "mr-auto bg-primary text-white" : "ml-auto bg-white text-text"
+                          }`}
+                        >
+                          <div className="text-xs font-semibold opacity-80">{mine ? "You" : sender?.username ?? "User"}</div>
+                          <div className="mt-1">{message.text}</div>
+                          <div className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-text-muted"}`}>
+                            {timeLabel(message.createdAt)}
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="text-sm text-text-muted">Select a person to start a chat.</div>
+                  )}
+                </div>
+                <form onSubmit={handleSendMessage} className="space-y-2">
+                  <textarea
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    className="min-h-20 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
+                    placeholder={selectedPartner ? `Message ${selectedPartner.username}` : "Select a user first"}
+                    disabled={!selectedPartner}
+                  />
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50"
+                  disabled={!selectedPartner || isLockedUser}
+                >
+                    <Send className="h-4 w-4" />
+                    Send
+                  </button>
+                </form>
+              </div>
             </ShellCard>
+
+            {adminGroups.length ? (
+              <ShellCard className="p-4 text-right">
+                <div className="mb-3 text-lg font-bold text-text">Admin panel</div>
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-text">Groups</div>
+                    {adminGroups.map((group) => (
+                      <div key={group.id} className="rounded-2xl bg-surface-soft p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-text">{group.name}</div>
+                            <div className="text-xs text-text-muted">
+                              {group.requiresApproval ? "Approval required" : "Open group"}
+                              {group.isLocked ? " · locked" : ""}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGroupLock(group.id, !group.isLocked)}
+                              className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-text"
+                            >
+                              {group.isLocked ? "Unlock" : "Lock"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGroup(group.id)}
+                              className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-danger"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {group.pendingMemberIds.map((userId) => {
+                            const pendingUser = userById(userId);
+                            return (
+                              <div key={userId} className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs">
+                                <button type="button" className="font-semibold text-text" onClick={() => openPrivateMessage(userId)}>
+                                  {pendingUser?.username ?? "User"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveJoin(group.id, userId)}
+                                  className="rounded-full bg-primary px-2 py-1 text-[11px] font-semibold text-white"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectJoin(group.id, userId)}
+                                  className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-danger"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-text">Users</div>
+                    {adminUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-soft px-3 py-2">
+                        <button type="button" onClick={() => openPrivateMessage(user.id)} className="text-right">
+                          <div className="font-semibold text-text">{user.username}</div>
+                          <div className="text-xs text-text-muted">{user.isLocked ? "Locked" : "Active"}</div>
+                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUserLock(user.id, !user.isLocked)}
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-text"
+                          >
+                            {user.isLocked ? "Unlock" : "Lock"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-danger"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-text">Threads</div>
+                    {adminPosts.map((post) => {
+                      const postGroup = data.groups.find((group) => group.id === post.groupId);
+                      const author = userById(post.userId);
+                      return (
+                        <div key={post.id} className="rounded-2xl bg-surface-soft p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-text">{author?.username ?? "User"}</div>
+                              <div className="text-xs text-text-muted">{postGroup?.name ?? "Group"}</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostLock(post.id, !post.isLocked)}
+                                className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-text"
+                              >
+                                {post.isLocked ? "Unlock" : "Lock"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePost(post.id)}
+                                className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-danger"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </ShellCard>
+            ) : null}
           </div>
         ) : null}
 
@@ -716,14 +983,36 @@ export default function CommunityApp() {
               <div className="flex items-center gap-2">
                 <div className="text-lg font-bold text-text">{selectedGroup.name}</div>
                 {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" /> : null}
+                {selectedGroup.requiresApproval ? <span className="rounded-full bg-surface-soft px-2 py-1 text-[11px] font-semibold text-text-muted">Approval</span> : null}
               </div>
-              <button
-                type="button"
-                onClick={() => handleLeaveGroup(selectedGroup.id)}
-                className="rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text"
-              >
-                Leave
-              </button>
+              <div className="flex items-center gap-2">
+                {canManageGroup ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleGroupLock(selectedGroup.id, !selectedGroup.isLocked)}
+                      className="rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text"
+                    >
+                      {selectedGroup.isLocked ? "Unlock" : "Lock"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGroup(selectedGroup.id)}
+                      className="rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-danger"
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleLeaveGroup(selectedGroup.id)}
+                  className="rounded-full bg-surface-soft px-4 py-2 text-sm font-semibold text-text disabled:opacity-50"
+                  disabled={isLockedUser}
+                >
+                  Leave
+                </button>
+              </div>
             </div>
 
             {canManageGroup ? (
@@ -734,14 +1023,27 @@ export default function CommunityApp() {
                     const applicant = userById(request.userId);
                     return (
                       <div key={request.id} className="flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2">
-                        <div className="text-sm text-text">{applicant?.username ?? "User"}</div>
-                        <button
-                          type="button"
-                          onClick={() => handleApproveJoin(selectedGroup.id, request.userId)}
-                          className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white"
-                        >
-                          Approve
+                        <button type="button" onClick={() => openPrivateMessage(request.userId)} className="text-sm text-text">
+                          {applicant?.username ?? "User"}
                         </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApproveJoin(selectedGroup.id, request.userId)}
+                            className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                            disabled={isLockedUser}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectJoin(selectedGroup.id, request.userId)}
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
+                            disabled={isLockedUser}
+                          >
+                            Reject
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -759,7 +1061,13 @@ export default function CommunityApp() {
                 return (
                   <article key={post.id} className="rounded-2xl bg-white p-4 shadow-card">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm font-semibold text-text">{author?.username ?? "User"}</div>
+                      <button
+                        type="button"
+                        onClick={() => openPrivateMessage(post.userId)}
+                        className="text-sm font-semibold text-text"
+                      >
+                        {author?.username ?? "User"}
+                      </button>
                       {post.isLocked ? (
                         <span className="rounded-full bg-surface-soft px-2 py-1 text-[11px] font-semibold text-text-muted">
                           Locked
@@ -781,9 +1089,9 @@ export default function CommunityApp() {
                           setReplyTargetPostId(post.id);
                           setCommentText("");
                         }}
-                        disabled={post.isLocked}
+                        disabled={post.isLocked || isLockedUser}
                         className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold ${
-                          post.isLocked ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
+                          post.isLocked || isLockedUser ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
                         }`}
                       >
                         <MessageCircle className="h-4 w-4" />
@@ -815,7 +1123,13 @@ export default function CommunityApp() {
                         const commenter = userById(comment.userId);
                         return (
                           <div key={comment.id} className="rounded-2xl bg-surface-soft px-3 py-2 text-right">
-                            <div className="text-xs font-semibold text-text">{commenter?.username ?? "User"}</div>
+                            <button
+                              type="button"
+                              onClick={() => openPrivateMessage(comment.userId)}
+                              className="text-xs font-semibold text-text"
+                            >
+                              {commenter?.username ?? "User"}
+                            </button>
                             <div className="text-sm text-text">{comment.text}</div>
                           </div>
                         );
@@ -829,10 +1143,10 @@ export default function CommunityApp() {
             <form onSubmit={handleComposerSubmit} className="sticky bottom-0 rounded-2xl bg-white p-4 shadow-card">
               {activeReplyPost ? (
                 <div className="mb-3 flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2 text-sm text-text">
-                  <div className="truncate">
-                    Replying to {activeReplyAuthor?.username ?? "thread"}
-                    {activeReplyPost.isLocked ? " · locked" : ""}
-                  </div>
+                <div className="truncate">
+                  Replying to {activeReplyAuthor?.username ?? "thread"}
+                  {activeReplyPost.isLocked ? " · locked" : ""}
+                </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -857,7 +1171,7 @@ export default function CommunityApp() {
                 }}
                 className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
                 placeholder={activeReplyPost ? "Write a comment" : "Write a post"}
-                disabled={Boolean(activeReplyPost?.isLocked)}
+                disabled={Boolean(activeReplyPost?.isLocked || isLockedUser)}
               />
 
               {!activeReplyPost ? (
@@ -878,7 +1192,7 @@ export default function CommunityApp() {
                         onChange={(event) => handleImageInput(event.target.files?.[0] ?? null)}
                       />
                     </label>
-                    <button type="submit" className="rounded-full bg-primary px-5 py-3 font-semibold text-white">
+                    <button type="submit" className="rounded-full bg-primary px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={isLockedUser}>
                       Publish
                     </button>
                   </div>
@@ -888,7 +1202,7 @@ export default function CommunityApp() {
                   <button
                     type="submit"
                     className="rounded-full bg-primary px-5 py-3 font-semibold text-white"
-                    disabled={Boolean(activeReplyPost?.isLocked)}
+                    disabled={Boolean(activeReplyPost?.isLocked || isLockedUser)}
                   >
                     Comment
                   </button>
