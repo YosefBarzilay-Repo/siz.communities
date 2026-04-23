@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { deleteUser, disableUser, getGroups, getUserById, lockUser } from "@/lib/store";
+import { deleteUser, disableUser, getGroups, getUserById, isSuperUserUser, lockUser } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -12,6 +12,10 @@ type Params = {
 };
 
 const hasAdminAccess = async (userId: string) => {
+  const user = await getUserById(userId);
+  if (user && isSuperUserUser(user)) {
+    return true;
+  }
   const groups = await getGroups();
   return groups.some((group) => group.adminId === userId);
 };

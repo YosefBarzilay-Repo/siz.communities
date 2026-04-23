@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       currentUser: {
         id: currentUser.id,
         username: currentUser.username,
-        email: currentUser.email
+        email: currentUser.email,
+        isSuperUser: currentUser.isSuperUser
       },
       currentUserDetail: await getPublicUserById(currentUser.id)
     });

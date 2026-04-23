@@ -8,6 +8,7 @@ export type User = {
   email: string;
   passwordHash: string;
   joinedGroupIds: string[];
+  isSuperUser: boolean;
   isLocked: boolean;
   isDisabled: boolean;
   bio: string;
@@ -46,6 +47,7 @@ export type Comment = {
   id: string;
   postId: string;
   userId: string;
+  parentCommentId?: string | null;
   text: string;
   createdAt: string;
 };
@@ -69,6 +71,7 @@ export type AuthSession = {
   id: string;
   username: string;
   email: string;
+  isSuperUser: boolean;
 };
 
 export type BootstrapPayload = {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signAuthToken, tokenName } from "@/lib/auth";
-import { verifyUser } from "@/lib/store";
+import { isSuperUserUser, verifyUser } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   const token = await signAuthToken(user.id);
   const response = NextResponse.json({
-    user: { id: user.id, username: user.username, email: user.email },
+    user: { id: user.id, username: user.username, email: user.email, isSuperUser: isSuperUserUser(user) },
     token
   });
 

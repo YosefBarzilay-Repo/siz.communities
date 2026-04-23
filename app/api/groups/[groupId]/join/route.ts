@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { getGroupById, joinGroup, leaveGroup } from "@/lib/store";
+import { getGroupById, isSuperUserUser, joinGroup, leaveGroup } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: Params) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  if (group.isDisabled) {
+  if (group.isDisabled && !isSuperUserUser(user)) {
     return NextResponse.json({ error: "Group is disabled" }, { status: 423 });
   }
 

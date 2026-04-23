@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { deleteGroup, getGroupById, updateGroup } from "@/lib/store";
+import { deleteGroup, getGroupById, isSuperUserUser, updateGroup } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, context: Params) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  if (group.adminId !== user.id) {
+  if (!isSuperUserUser(user) && group.adminId !== user.id) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
@@ -51,7 +51,7 @@ export async function DELETE(request: NextRequest, context: Params) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  if (group.adminId !== user.id) {
+  if (!isSuperUserUser(user) && group.adminId !== user.id) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 

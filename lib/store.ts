@@ -16,7 +16,24 @@ type StoreCollections = {
   joinRequests: Collection<GroupJoinRequest>;
 };
 
-const omitPassword = ({ passwordHash, ...rest }: User): PublicUser => rest;
+const getSuperUserEmails = () =>
+  new Set(
+    (process.env.SUPER_USER_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+export const isSuperUserUser = (user: Pick<User, "email" | "isSuperUser">) =>
+  Boolean(user.isSuperUser || getSuperUserEmails().has(user.email.toLowerCase()));
+
+const normalizeUser = (user: User | null): User | null =>
+  user ? { ...user, isSuperUser: isSuperUserUser(user) } : null;
+
+const omitPassword = ({ passwordHash, ...rest }: User): PublicUser => ({
+  ...rest,
+  isSuperUser: isSuperUserUser(rest)
+});
 
 type MemoryState = {
   users: User[];
@@ -98,7 +115,7 @@ const requireMongo = async () => {
 const getMemoryCurrentUser = async (currentUserId?: string | null) => {
   if (!currentUserId) return null;
   const user = memory.users.find((item) => item.id === currentUserId);
-  return user ? { id: user.id, username: user.username, email: user.email } : null;
+  return user ? { id: user.id, username: user.username, email: user.email, isSuperUser: isSuperUserUser(user) } : null;
 };
 
 export const bootstrap = async (currentUserId?: string | null): Promise<BootstrapPayload> => {
@@ -138,7 +155,8 @@ export const bootstrap = async (currentUserId?: string | null): Promise<Bootstra
 
 export const getUsers = async () => {
   const collections = await requireMongo();
-  return collections ? collections.users.find().sort({ createdAt: -1 }).toArray() : memory.users;
+  const users = collections ? await collections.users.find().sort({ createdAt: -1 }).toArray() : memory.users;
+  return users.map((user) => ({ ...user, isSuperUser: isSuperUserUser(user) }));
 };
 
 export const getGroups = async () => {
@@ -168,18 +186,20 @@ export const getJoinRequests = async () => {
 
 export const getUserById = async (id: string) => {
   const collections = await requireMongo();
-  return collections ? collections.users.findOne({ id }) : memory.users.find((user) => user.id === id) ?? null;
+  const user = collections ? await collections.users.findOne({ id }) : memory.users.find((user) => user.id === id) ?? null;
+  return normalizeUser(user);
 };
 
 export const getWritableUserById = async (id: string) => {
   const user = await getUserById(id);
-  return user && !user.isLocked && !user.isDisabled ? user : null;
+  return user && (isSuperUserUser(user) || (!user.isLocked && !user.isDisabled)) ? user : null;
 };
 
 export const getUserByEmail = async (email: string) => {
   const normalized = email.toLowerCase();
   const collections = await requireMongo();
-  return collections ? collections.users.findOne({ email: normalized }) : memory.users.find((user) => user.email.toLowerCase() === normalized) ?? null;
+  const user = collections ? await collections.users.findOne({ email: normalized }) : memory.users.find((user) => user.email.toLowerCase() === normalized) ?? null;
+  return normalizeUser(user);
 };
 
 export const getGroupById = async (id: string) => {
@@ -212,6 +232,7 @@ export const createUser = async (input: {
     email: input.email.trim().toLowerCase(),
     passwordHash: await bcrypt.hash(input.password, 10),
     joinedGroupIds: [],
+    isSuperUser: getSuperUserEmails().has(input.email.trim().toLowerCase()),
     isLocked: false,
     isDisabled: false,
     bio: input.bio?.trim() || "Community member on SIZ",
@@ -224,7 +245,7 @@ export const createUser = async (input: {
   } else {
     memory.users.unshift(user);
   }
-  return user;
+  return normalizeUser(user) as User;
 };
 
 export const verifyUser = async (email: string, password: string) => {
@@ -528,11 +549,13 @@ export const addComment = async (input: {
   postId: string;
   userId: string;
   text: string;
+  parentCommentId?: string | null;
 }) => {
   const comment: Comment = {
     id: randomUUID(),
     postId: input.postId,
     userId: input.userId,
+    parentCommentId: input.parentCommentId ?? null,
     text: input.text.trim(),
     createdAt: new Date().toISOString()
   };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { addComment, getComments, getGroupById, getPostById } from "@/lib/store";
+import { addComment, getComments, getGroupById, getPostById, isSuperUserUser } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -34,24 +34,32 @@ export async function POST(request: NextRequest, context: Params) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  const isMember = group.adminId === user.id || group.memberIds.includes(user.id);
+  const isMember = isSuperUserUser(user) || group.adminId === user.id || group.memberIds.includes(user.id);
   if (!isMember) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
-  if (group.isDisabled || group.isLocked || post.isLocked || post.isDisabled) {
+  if ((group.isDisabled || group.isLocked || post.isLocked || post.isDisabled) && !isSuperUserUser(user)) {
     return NextResponse.json({ error: "Thread is disabled" }, { status: 423 });
   }
 
   const body = await request.json();
   const text = String(body.text ?? "").trim();
+  const parentCommentId = String(body.parentCommentId ?? "").trim();
   if (!text) {
     return NextResponse.json({ error: "Comment text is required" }, { status: 400 });
+  }
+  if (parentCommentId) {
+    const parentComment = (await getComments()).find((comment) => comment.id === parentCommentId);
+    if (!parentComment || parentComment.postId !== postId) {
+      return NextResponse.json({ error: "Parent comment not found" }, { status: 400 });
+    }
   }
 
   const comment = await addComment({
     postId,
     userId: user.id,
-    text
+    text,
+    parentCommentId: parentCommentId || null
   });
 
   broadcastUpdate("store:update", { kind: "comment-created", postId, commentId: comment.id });

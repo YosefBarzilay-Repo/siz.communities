@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { deletePost, disablePost, getGroupById, getPostById, lockPost } from "@/lib/store";
+import { deletePost, disablePost, getGroupById, getPostById, isSuperUserUser, lockPost } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest, context: Params) {
 
   const group = await getGroupById(post.groupId);
   const body = await request.json().catch(() => ({}));
-  const canEdit = post.userId === user.id || group?.adminId === user.id;
+  const canEdit = isSuperUserUser(user) || post.userId === user.id || group?.adminId === user.id;
   if (!canEdit) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
@@ -51,7 +51,7 @@ export async function DELETE(request: NextRequest, context: Params) {
   }
 
   const group = await getGroupById(post.groupId);
-  const canDelete = post.userId === user.id || group?.adminId === user.id;
+  const canDelete = isSuperUserUser(user) || post.userId === user.id || group?.adminId === user.id;
   if (!canDelete) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }

@@ -9,7 +9,7 @@ Mobile-first Hebrew RTL MVP for community buying, selling, and giveaways.
 - JWT auth with login, registration, and logout
 - Group feed, group creation, join/leave actions
 - Post creation for sale/giveaway
-- Public comment threads
+- Public comment threads with threaded replies
 - 1:1 private messages
 - Socket.IO live refresh for new activity
 
@@ -26,12 +26,14 @@ Open `http://localhost:3000`.
 
 - Email: `noa@siz.local`
 - Password: `123456`
+- This seeded account is marked as a super user in the default data.
 
 ## Notes
 
 - In development, if `MONGODB_URI` is missing, the app falls back to seeded in-memory data.
 - In production, MongoDB is required. If `MONGODB_URI` is missing or the server cannot reach Atlas, the app will fail to start instead of quietly using memory.
 - Set `MONGODB_URI`, `MONGODB_DB`, and `JWT_SECRET` in `.env.local` for local Mongo-backed persistence.
+- Set `SUPER_USER_EMAILS` to a comma-separated list of emails that should always resolve as super users, even if the database does not yet store that flag.
 
 ## GitHub + Hosting
 
@@ -42,6 +44,7 @@ Open `http://localhost:3000`.
    - `MONGODB_URI`
    - `MONGODB_DB`
    - `JWT_SECRET`
+   - `SUPER_USER_EMAILS`
    - `NODE_ENV=production`
 5. Use the project start command:
    - `npm start`

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { io } from "socket.io-client";
 import { ArrowLeft, Ban, Check, LogOut, Lock, MessageCircle, Plus, Send, ShieldCheck, Store, Trash2, Unlock, Upload, UserRound, X } from "lucide-react";
-import type { BootstrapPayload, Group, Post } from "@/lib/types";
+import type { BootstrapPayload, Comment, Group, Post } from "@/lib/types";
 
 type PublicUser = BootstrapPayload["users"][number];
 
@@ -105,6 +105,7 @@ export default function CommunityApp() {
   const [view, setView] = useState<View>("groups");
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [replyTargetPostId, setReplyTargetPostId] = useState("");
+  const [replyTargetCommentId, setReplyTargetCommentId] = useState("");
   const [postText, setPostText] = useState("");
   const [postImage, setPostImage] = useState("");
   const [uploadName, setUploadName] = useState("");
@@ -121,19 +122,22 @@ export default function CommunityApp() {
 
   const currentUser = data.currentUser;
   const currentUserDetail = data.currentUserDetail;
-  const isWriteBlockedUser = Boolean(currentUserDetail?.isLocked || currentUserDetail?.isDisabled);
+  const isSuperUser = Boolean(currentUserDetail?.isSuperUser);
+  const isWriteBlockedUser = Boolean(!isSuperUser && (currentUserDetail?.isLocked || currentUserDetail?.isDisabled));
 
   const userById = (id: string) => data.users.find((user) => user.id === id);
 
   const joinedGroups = useMemo(() => {
+    if (isSuperUser) return data.groups;
     const joinedIds = new Set(currentUserDetail?.joinedGroupIds ?? []);
     return data.groups.filter((group) => joinedIds.has(group.id));
-  }, [currentUserDetail?.joinedGroupIds, data.groups]);
+  }, [currentUserDetail?.joinedGroupIds, data.groups, isSuperUser]);
 
   const availableGroups = useMemo(() => {
+    if (isSuperUser) return [];
     const joinedIds = new Set(currentUserDetail?.joinedGroupIds ?? []);
     return data.groups.filter((group) => !joinedIds.has(group.id));
-  }, [currentUserDetail?.joinedGroupIds, data.groups]);
+  }, [currentUserDetail?.joinedGroupIds, data.groups, isSuperUser]);
 
   const selectedGroup = useMemo(
     () => data.groups.find((group) => group.id === selectedGroupId) ?? null,
@@ -149,21 +153,21 @@ export default function CommunityApp() {
   }, [data.posts, selectedGroup]);
 
   const activeReplyPost = replyTargetPostId ? data.posts.find((post) => post.id === replyTargetPostId) ?? null : null;
-  const activeReplyAuthor = activeReplyPost ? userById(activeReplyPost.userId) : null;
-  const canManageGroup = Boolean(currentUser && selectedGroup && currentUser.id === selectedGroup.adminId);
+  const activeReplyComment = replyTargetCommentId ? data.comments.find((comment) => comment.id === replyTargetCommentId) ?? null : null;
+  const activeReplyAuthor = activeReplyComment ? userById(activeReplyComment.userId) : activeReplyPost ? userById(activeReplyPost.userId) : null;
+  const canManageGroup = Boolean(currentUser && selectedGroup && (isSuperUser || currentUser.id === selectedGroup.adminId));
   const canAccessSelectedGroup = Boolean(
-    selectedGroup && (selectedGroup.adminId === currentUser?.id || selectedGroup.memberIds.includes(currentUser?.id ?? ""))
+    selectedGroup && (isSuperUser || selectedGroup.adminId === currentUser?.id || selectedGroup.memberIds.includes(currentUser?.id ?? ""))
   );
   const canWriteInSelectedGroup = Boolean(
     selectedGroup &&
       canAccessSelectedGroup &&
-      !selectedGroup.isLocked &&
-      !selectedGroup.isDisabled &&
+      (isSuperUser || (!selectedGroup.isLocked && !selectedGroup.isDisabled)) &&
       !isWriteBlockedUser
   );
   const adminGroups = useMemo(
-    () => data.groups.filter((group) => group.adminId === currentUser?.id),
-    [data.groups, currentUser?.id]
+    () => (isSuperUser ? data.groups : data.groups.filter((group) => group.adminId === currentUser?.id)),
+    [data.groups, currentUser?.id, isSuperUser]
   );
   const adminUsers = useMemo(
     () => data.users.filter((user) => user.id !== currentUser?.id),
@@ -172,9 +176,9 @@ export default function CommunityApp() {
   const adminPosts = useMemo(
     () =>
       data.posts
-        .filter((post) => adminGroups.some((group) => group.id === post.groupId))
+        .filter((post) => isSuperUser || adminGroups.some((group) => group.id === post.groupId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [adminGroups, data.posts]
+    [adminGroups, data.posts, isSuperUser]
   );
 
   const messagePartners = useMemo(() => {
@@ -188,13 +192,13 @@ export default function CommunityApp() {
 
   const groupContacts = useMemo(() => {
     const ids = new Set<string>();
-    joinedGroups.forEach((group) => {
+    (isSuperUser ? data.groups : joinedGroups).forEach((group) => {
       group.memberIds.forEach((id) => {
         if (id !== currentUser?.id) ids.add(id);
       });
     });
     return [...ids].map((id) => userById(id)).filter(Boolean) as PublicUser[];
-  }, [joinedGroups, currentUser?.id, data.users]);
+  }, [joinedGroups, currentUser?.id, data.users, isSuperUser, data.groups]);
 
   const selectedPartner = selectedPartnerId ? userById(selectedPartnerId) ?? null : messagePartners[0] ?? groupContacts[0] ?? null;
   const currentConversation = selectedPartner
@@ -265,8 +269,15 @@ export default function CommunityApp() {
   useEffect(() => {
     if (replyTargetPostId && !groupPosts.some((post) => post.id === replyTargetPostId)) {
       setReplyTargetPostId("");
+      setReplyTargetCommentId("");
     }
   }, [groupPosts, replyTargetPostId, selectedGroup]);
+
+  useEffect(() => {
+    if (replyTargetCommentId && !data.comments.some((comment) => comment.id === replyTargetCommentId)) {
+      setReplyTargetCommentId("");
+    }
+  }, [data.comments, replyTargetCommentId]);
 
   useEffect(() => {
     if (!selectedPartnerId && messagePartners[0]) {
@@ -321,6 +332,7 @@ export default function CommunityApp() {
     setView("groups");
     setSelectedGroupId("");
     setReplyTargetPostId("");
+    setReplyTargetCommentId("");
     setPostText("");
     setPostImage("");
     setUploadName("");
@@ -339,6 +351,7 @@ export default function CommunityApp() {
     await api(`/api/groups/${groupId}/join`, { method: "DELETE" });
     setSelectedGroupId("");
     setReplyTargetPostId("");
+    setReplyTargetCommentId("");
     setCommentText("");
     setPostText("");
     await refresh();
@@ -419,6 +432,7 @@ export default function CommunityApp() {
     });
     if (replyTargetPostId === postId) {
       setReplyTargetPostId("");
+      setReplyTargetCommentId("");
       setCommentText("");
     }
     await refresh();
@@ -473,13 +487,17 @@ export default function CommunityApp() {
 
     if (activeReplyPost) {
       const text = commentText.trim();
-      if (!text || activeReplyPost.isLocked) return;
+      if (!text || (!isSuperUser && activeReplyPost.isLocked)) return;
       await api(`/api/posts/${activeReplyPost.id}/comments`, {
         method: "POST",
-        body: JSON.stringify({ text })
+        body: JSON.stringify({
+          text,
+          parentCommentId: replyTargetCommentId || null
+        })
       });
       setCommentText("");
       setReplyTargetPostId("");
+      setReplyTargetCommentId("");
       await refresh();
       setSelectedGroupId(currentGroupId);
       setView("group");
@@ -678,6 +696,7 @@ export default function CommunityApp() {
                   onClick={() => {
                     setSelectedGroupId(group.id);
                     setReplyTargetPostId("");
+                    setReplyTargetCommentId("");
                     setCommentText("");
                     setPostText("");
                     setPostImage("");
@@ -691,7 +710,7 @@ export default function CommunityApp() {
                     <div className="flex items-center gap-2 text-text-muted">
                       {group.isDisabled ? <Ban className="h-4 w-4" aria-label="disabled" /> : null}
                       {group.isLocked ? <Lock className="h-4 w-4" aria-label="locked" /> : null}
-                      {group.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
+                        {isSuperUser || group.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
                     </div>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
@@ -949,7 +968,7 @@ export default function CommunityApp() {
                               {group.isLocked ? " · Locked" : ""}
                             </div>
                           </div>
-                        {group.adminId === currentUser?.id ? (
+                        {isSuperUser || group.adminId === currentUser?.id ? (
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -1001,7 +1020,7 @@ export default function CommunityApp() {
                           <div className="text-xs text-text-muted">Read only</div>
                         )}
                         </div>
-                        {group.adminId === currentUser?.id ? (
+                        {isSuperUser || group.adminId === currentUser?.id ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {group.pendingMemberIds.map((userId) => {
                             const pendingUser = userById(userId);
@@ -1171,7 +1190,7 @@ export default function CommunityApp() {
                 <div className="text-lg font-bold text-text">{selectedGroup.name}</div>
                 {selectedGroup.isLocked ? <Lock className="h-4 w-4 text-text-muted" aria-label="locked" /> : null}
                 {selectedGroup.isDisabled ? <Ban className="h-4 w-4 text-text-muted" aria-label="disabled" /> : null}
-                {selectedGroup.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
+                {isSuperUser || selectedGroup.adminId === currentUser?.id ? <ShieldCheck className="h-4 w-4 text-primary" aria-label="admin" /> : null}
               </div>
               <div className="flex items-center gap-2">
                 {canManageGroup ? (
@@ -1291,7 +1310,55 @@ export default function CommunityApp() {
                 const comments = data.comments
                   .filter((comment) => comment.postId === post.id)
                   .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-                const canManagePost = currentUser?.id === post.userId || canManageGroup;
+                const canManagePost = isSuperUser || currentUser?.id === post.userId || canManageGroup;
+                const rootComments: Comment[] = [];
+                const commentChildren = new Map<string, Comment[]>();
+                comments.forEach((comment) => {
+                  if (comment.parentCommentId) {
+                    const children = commentChildren.get(comment.parentCommentId) ?? [];
+                    children.push(comment);
+                    commentChildren.set(comment.parentCommentId, children);
+                    return;
+                  }
+                  rootComments.push(comment);
+                });
+                const renderCommentNode = (comment: Comment, depth = 0): ReactNode => {
+                  const commenter = userById(comment.userId);
+                  const replyDisabled = !canWriteInSelectedGroup || (!isSuperUser && (post.isLocked || post.isDisabled));
+                  const children = commentChildren.get(comment.id) ?? [];
+                  return (
+                    <div key={comment.id} className={depth > 0 ? "mr-6 border-r border-primary/15 pr-3" : ""}>
+                      <div className="rounded-2xl bg-surface-soft px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => openPrivateMessage(comment.userId)}
+                          className="text-xs font-semibold text-text"
+                        >
+                          {commenter?.username ?? "User"}
+                        </button>
+                        <div className="mt-1 text-sm text-text">{comment.text}</div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="text-[11px] text-text-muted">{dateTimeLabel(comment.createdAt)}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyTargetPostId(post.id);
+                              setReplyTargetCommentId(comment.id);
+                              setCommentText("");
+                            }}
+                            disabled={replyDisabled}
+                            className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-semibold text-primary disabled:opacity-50"
+                            aria-label="reply to comment"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            Reply
+                          </button>
+                        </div>
+                      </div>
+                      {children.length ? <div className="mt-2 space-y-2">{children.map((child) => renderCommentNode(child, depth + 1))}</div> : null}
+                    </div>
+                  );
+                };
                 return (
                   <article key={post.id} className="rounded-2xl bg-white p-4 shadow-card">
                     <div className="flex items-start justify-between gap-3">
@@ -1320,11 +1387,12 @@ export default function CommunityApp() {
                         type="button"
                         onClick={() => {
                           setReplyTargetPostId(post.id);
+                          setReplyTargetCommentId("");
                           setCommentText("");
                         }}
-                        disabled={!canWriteInSelectedGroup || post.isLocked || post.isDisabled}
+                        disabled={!canWriteInSelectedGroup || (!isSuperUser && (post.isLocked || post.isDisabled))}
                         className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold ${
-                          !canWriteInSelectedGroup || post.isLocked || post.isDisabled ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
+                          !canWriteInSelectedGroup || (!isSuperUser && (post.isLocked || post.isDisabled)) ? "bg-surface-soft text-text-muted" : "bg-primary text-white"
                         }`}
                         aria-label="comment"
                       >
@@ -1362,22 +1430,7 @@ export default function CommunityApp() {
                     </div>
 
                     <div className="mt-4 space-y-2 border-t border-surface-soft pt-3">
-                      {comments.map((comment) => {
-                        const commenter = userById(comment.userId);
-                        return (
-                          <div key={comment.id} className="rounded-2xl bg-surface-soft px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => openPrivateMessage(comment.userId)}
-                              className="text-xs font-semibold text-text"
-                            >
-                              {commenter?.username ?? "User"}
-                            </button>
-                            <div className="text-sm text-text">{comment.text}</div>
-                            <div className="mt-1 text-[11px] text-text-muted">{dateTimeLabel(comment.createdAt)}</div>
-                          </div>
-                        );
-                      })}
+                      {rootComments.map((comment) => renderCommentNode(comment))}
                     </div>
                   </article>
                 );
@@ -1388,13 +1441,15 @@ export default function CommunityApp() {
               {activeReplyPost ? (
                 <div className="mb-3 flex items-center justify-between rounded-2xl bg-surface-soft px-3 py-2 text-sm text-text">
                   <div className="truncate">
-                    Replying to {activeReplyAuthor?.username ?? "thread"}
+                    Replying to {activeReplyComment ? "comment by " : ""}
+                    {activeReplyAuthor?.username ?? "thread"}
                     {activeReplyPost.isLocked ? " · Locked" : ""}
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setReplyTargetPostId("");
+                      setReplyTargetCommentId("");
                       setCommentText("");
                     }}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-text"
@@ -1404,7 +1459,7 @@ export default function CommunityApp() {
                 </div>
               ) : null}
 
-              <textarea
+                <textarea
                 value={activeReplyPost ? commentText : postText}
                 onChange={(event) => {
                   if (activeReplyPost) {
@@ -1415,7 +1470,7 @@ export default function CommunityApp() {
                 }}
                 className="min-h-24 w-full resize-none rounded-2xl border border-surface-border bg-white px-4 py-3 text-right outline-none focus:border-primary"
                 placeholder={activeReplyPost ? "Write a reply" : "Write a post"}
-                disabled={Boolean(activeReplyPost?.isLocked || activeReplyPost?.isDisabled || !canWriteInSelectedGroup)}
+                disabled={Boolean(!canWriteInSelectedGroup || (!isSuperUser && (activeReplyPost?.isLocked || activeReplyPost?.isDisabled)))}
               />
 
               {!activeReplyPost ? (
@@ -1445,7 +1500,7 @@ export default function CommunityApp() {
                   <button
                     type="submit"
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
-                    disabled={Boolean(activeReplyPost?.isLocked || activeReplyPost?.isDisabled || !canWriteInSelectedGroup)}
+                    disabled={Boolean(!canWriteInSelectedGroup || (!isSuperUser && (activeReplyPost?.isLocked || activeReplyPost?.isDisabled)))}
                     aria-label="comment"
                   >
                     <MessageCircle className="h-4 w-4" />

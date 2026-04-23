@@ -11,6 +11,7 @@ const createUser = (username: string, email: string, password: string, bio: stri
   email,
   passwordHash: bcrypt.hashSync(password, 10),
   joinedGroupIds: [],
+  isSuperUser: false,
   isLocked: false,
   isDisabled: false,
   bio,
@@ -23,6 +24,8 @@ const users: User[] = [
   createUser("Dan Barak", "dan@siz.local", "123456", "Student, gadget hunter, and casual seller."),
   createUser("Yael Sini", "yael@siz.local", "123456", "Local organizer for building updates.")
 ];
+
+users[0].isSuperUser = true;
 
 const groups: Group[] = [
   {

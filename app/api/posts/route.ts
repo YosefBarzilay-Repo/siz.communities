@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWritableUserFromRequest } from "@/lib/auth";
-import { createPost, getGroupById, getPosts } from "@/lib/store";
+import { createPost, getGroupById, getPosts, isSuperUserUser } from "@/lib/store";
 import { broadcastUpdate } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
-  const isMember = group.adminId === user.id || group.memberIds.includes(user.id);
+  const isMember = isSuperUserUser(user) || group.adminId === user.id || group.memberIds.includes(user.id);
   if (!isMember) {
     return NextResponse.json({ error: "Join approval required" }, { status: 403 });
   }
-  if (group.isDisabled || group.isLocked) {
+  if ((group.isDisabled || group.isLocked) && !isSuperUserUser(user)) {
     return NextResponse.json({ error: "Group is disabled" }, { status: 423 });
   }
 
